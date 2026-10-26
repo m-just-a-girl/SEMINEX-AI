@@ -1,0 +1,39 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.eslintcache
+
+# Python cache & artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases & logs
+*.log
+seminex.db-journal
+
+# Large raw dataset files (WM-811K raw LSWMD.pkl is ~2GB)
+data/raw/LSWMD.pkl
+data/raw/*.zip
+data/raw/*.tar.gz
+
+# Environment files
+.env
+.env.local
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
