@@ -1,6 +1,6 @@
 import io
 import csv
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -78,7 +78,7 @@ def generate_pdf_report(inspection_data: Dict[str, Any]) -> bytes:
         ],
         [
             Paragraph("AI-Powered Semiconductor Quality Intelligence & Decision Support", subtitle_style),
-            Paragraph(f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}", ParagraphStyle('RSub', parent=styles['Normal'], alignment=2, fontSize=8, textColor=colors.HexColor('#64748B')))
+            Paragraph(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}", ParagraphStyle('RSub', parent=styles['Normal'], alignment=2, fontSize=8, textColor=colors.HexColor('#64748B')))
         ]
     ]
     t_header = Table(header_data, colWidths=[340, 200])

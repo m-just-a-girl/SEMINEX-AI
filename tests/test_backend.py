@@ -1,3 +1,4 @@
+import uuid
 import pytest
 import numpy as np
 from backend.config import PATTERN_CLASSES
@@ -90,7 +91,7 @@ def test_pdf_report_generation():
 
 def test_database_persistence():
     init_db()
-    test_id = "INSP-UNITTEST-001"
+    test_id = f"INSP-UNITTEST-{uuid.uuid4().hex[:8]}"
     payload = {
         "id": test_id,
         "timestamp": "2026-10-23T10:00:00Z",

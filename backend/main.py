@@ -3,7 +3,7 @@ import io
 import json
 import uuid
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,7 +71,7 @@ def get_system_status():
         "labeled_records": ds_info["labeled_records"],
         "database_status": "connected",
         "total_inspections_logged": history["total"],
-        "server_time_utc": datetime.utcnow().isoformat()
+        "server_time_utc": datetime.now(timezone.utc).isoformat()
     }
 
 @app.get("/api/dataset/info")
@@ -148,10 +148,11 @@ def inspect_wafer(payload: Dict[str, Any]):
     hypothesis_info = get_root_cause_hypothesis(pred_class)
 
     # 4. Persistence
-    insp_id = f"INSP-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    now_utc = datetime.now(timezone.utc)
+    insp_id = f"INSP-{now_utc.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     record_payload = {
         "id": insp_id,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": now_utc.isoformat(),
         "input_source": input_source,
         "record_id": record_id or insp_id,
         "lot_name": lot_name,

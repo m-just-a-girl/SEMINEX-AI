@@ -1,6 +1,6 @@
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from backend.config import DATABASE_PATH
 
@@ -65,7 +65,7 @@ def save_inspection(data: Dict[str, Any]) -> str:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO inspections (
+    INSERT OR REPLACE INTO inspections (
         id, timestamp, input_source, record_id, lot_name, wafer_index,
         original_label, predicted_class, confidence, class_scores_json,
         model_version, model_mode, failing_die_count, total_die_count,
@@ -74,7 +74,7 @@ def save_inspection(data: Dict[str, Any]) -> str:
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data["id"],
-        data.get("timestamp", datetime.utcnow().isoformat()),
+        data.get("timestamp", datetime.now(timezone.utc).isoformat()),
         data.get("input_source", "Unknown"),
         data.get("record_id"),
         data.get("lot_name"),
@@ -163,7 +163,7 @@ def list_inspections(limit: int = 50, offset: int = 0, search: str = "", status:
 def update_review(inspection_id: str, decision: str, corrected_category: Optional[str] = None, notes: Optional[str] = None, reviewer_id: str = "Quality Engineer") -> bool:
     conn = get_connection()
     cursor = conn.cursor()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
     UPDATE inspections
     SET review_status = ?, reviewed_category = ?, reviewer_notes = ?, reviewed_at = ?
