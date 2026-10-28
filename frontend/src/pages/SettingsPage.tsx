@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Shield,
@@ -9,17 +9,34 @@ import {
   HardDrive,
   Save,
   CheckCircle2,
+  Globe,
+  Radio,
 } from 'lucide-react';
 import { TransparencyBadge } from '../components/TransparencyBadge';
+import { getBaseUrl, setCustomApiUrl, checkServerAvailability } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
   const [datasetPath, setDatasetPath] = useState('data/raw/LSWMD.pkl');
   const [modelWeightsPath, setModelWeightsPath] = useState('models/seminex_classifier.pkl');
   const [maxUploadMb, setMaxUploadMb] = useState(15);
+  const [cloudApiUrl, setCloudApiUrlState] = useState('');
+  const [connStatus, setConnStatus] = useState<'checking' | 'connected' | 'offline' | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    setCloudApiUrlState(getBaseUrl());
+  }, []);
+
+  const handleTestConnection = async () => {
+    setConnStatus('checking');
+    setCustomApiUrl(cloudApiUrl);
+    const ok = await checkServerAvailability();
+    setConnStatus(ok ? 'connected' : 'offline');
+  };
+
   const handleSave = () => {
-    setSaveMsg('Configuration saved successfully to local environment.');
+    setCustomApiUrl(cloudApiUrl);
+    setSaveMsg('Configuration and Cloud API URL saved successfully.');
     setTimeout(() => setSaveMsg(null), 3000);
   };
 
@@ -55,6 +72,61 @@ export const SettingsPage: React.FC = () => {
           <span>{saveMsg}</span>
         </div>
       )}
+
+      {/* Live API Server Connection Card */}
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-navy-900/90 to-navy-950 border border-cyan-500/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Globe className="w-5 h-5 text-cyan-400" />
+            <div>
+              <h3 className="text-base font-bold text-white">Live Python / FastAPI Backend Server URL</h3>
+              <p className="text-xs font-mono text-slate-400">
+                Connect your GitHub Pages frontend to your deployed Render, Railway, or local FastAPI server
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {connStatus === 'checking' && (
+              <span className="text-xs font-mono text-amber-400 animate-pulse">Checking connection...</span>
+            )}
+            {connStatus === 'connected' && (
+              <span className="px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/50 text-[11px] font-mono text-emerald-300 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                Connected to Live Backend
+              </span>
+            )}
+            {connStatus === 'offline' && (
+              <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-[11px] font-mono text-slate-400">
+                Fallback: Browser Engine Active
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="md:col-span-9">
+            <input
+              type="text"
+              placeholder="e.g. https://seminex-ai-backend.onrender.com (or leave empty for standalone browser mode)"
+              value={cloudApiUrl}
+              onChange={(e) => setCloudApiUrlState(e.target.value)}
+              className="w-full p-3 rounded-xl bg-navy-950 border border-slate-700 text-xs font-mono text-cyan-300 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400"
+            />
+          </div>
+          <div className="md:col-span-3 flex gap-2">
+            <button
+              onClick={handleTestConnection}
+              className="w-full flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl bg-navy-800 hover:bg-navy-700 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-all"
+            >
+              <Radio className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Test Ping</span>
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] font-mono text-slate-500">
+          💡 If you deploy the backend on Render, Railway, or Hugging Face, paste your public URL here. All 19 pages will automatically execute inference against your real cloud PyTorch / Scikit-Learn models!
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Storage Configuration */}

@@ -7,15 +7,34 @@ import {
 } from '../types';
 import { BrowserEngine, generatePatternArray } from './browserEngine';
 
-const BASE_URL = '';
+export function getBaseUrl(): string {
+  try {
+    const custom = localStorage.getItem('seminex_custom_api_url');
+    if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
+  } catch {}
+  return (import.meta as any).env?.VITE_API_URL || '';
+}
+
+export function setCustomApiUrl(url: string): void {
+  try {
+    if (url && url.trim()) {
+      localStorage.setItem('seminex_custom_api_url', url.trim().replace(/\/$/, ''));
+    } else {
+      localStorage.removeItem('seminex_custom_api_url');
+    }
+    serverCheckCache = null;
+  } catch {}
+}
+
 let serverCheckCache: boolean | null = null;
 
 export async function checkServerAvailability(): Promise<boolean> {
   if (serverCheckCache !== null) return serverCheckCache;
+  const base = getBaseUrl();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch(`${BASE_URL}/api/status`, { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    const res = await fetch(`${base}/api/status`, { signal: controller.signal });
     clearTimeout(timeoutId);
     serverCheckCache = res.ok;
     return serverCheckCache;
@@ -29,7 +48,7 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/status`);
+      const res = await fetch(`${getBaseUrl()}/api/status`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -42,7 +61,7 @@ export async function fetchDatasetInfo(): Promise<DatasetInfo> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/dataset/info`);
+      const res = await fetch(`${getBaseUrl()}/api/dataset/info`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -68,7 +87,7 @@ export async function fetchDatasetSamples(params: {
       if (params.lot && params.lot !== 'all') searchParams.set('lot', params.lot);
       if (params.search) searchParams.set('search', params.search);
 
-      const res = await fetch(`${BASE_URL}/api/dataset/samples?${searchParams.toString()}`);
+      const res = await fetch(`${getBaseUrl()}/api/dataset/samples?${searchParams.toString()}`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -81,7 +100,7 @@ export async function fetchWaferDetail(waferId: string): Promise<WaferSample> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/dataset/wafer/${waferId}`);
+      const res = await fetch(`${getBaseUrl()}/api/dataset/wafer/${waferId}`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -101,7 +120,7 @@ export async function runInspection(payload: {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/inspect`, {
+      const res = await fetch(`${getBaseUrl()}/api/inspect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -120,7 +139,7 @@ export async function uploadAndInspect(file: File): Promise<InspectionResult> {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`${BASE_URL}/api/inspect/upload`, {
+      const res = await fetch(`${getBaseUrl()}/api/inspect/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -141,7 +160,7 @@ export async function runComparison(payload: {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/compare`, {
+      const res = await fetch(`${getBaseUrl()}/api/compare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -171,7 +190,7 @@ export async function fetchInspectionHistory(params: {
       if (params.status) searchParams.set('status', params.status);
       if (params.category) searchParams.set('category', params.category);
 
-      const res = await fetch(`${BASE_URL}/api/history?${searchParams.toString()}`);
+      const res = await fetch(`${getBaseUrl()}/api/history?${searchParams.toString()}`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -184,7 +203,7 @@ export async function fetchInspectionDetail(id: string): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/history/${id}`);
+      const res = await fetch(`${getBaseUrl()}/api/history/${id}`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -206,7 +225,7 @@ export async function submitHumanReview(
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/reviews/${id}`, {
+      const res = await fetch(`${getBaseUrl()}/api/reviews/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -223,7 +242,7 @@ export async function askCopilot(query: string): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/copilot`, {
+      const res = await fetch(`${getBaseUrl()}/api/copilot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
@@ -240,7 +259,7 @@ export async function fetchForecast(): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/forecast`);
+      const res = await fetch(`${getBaseUrl()}/api/forecast`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -253,7 +272,7 @@ export async function fetchBatchAnalytics(): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/batch-analytics`);
+      const res = await fetch(`${getBaseUrl()}/api/batch-analytics`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -266,7 +285,7 @@ export async function generateSyntheticWafer(category: string, size: number = 38
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/synthetic/generate`, {
+      const res = await fetch(`${getBaseUrl()}/api/synthetic/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category, size }),
@@ -289,7 +308,7 @@ export async function triggerModelTraining(): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/model/train`, {
+      const res = await fetch(`${getBaseUrl()}/api/model/train`, {
         method: 'POST',
       });
       if (res.ok) return await res.json();
@@ -313,7 +332,7 @@ export async function fetchModelInfo(): Promise<any> {
   const isServer = await checkServerAvailability();
   if (isServer) {
     try {
-      const res = await fetch(`${BASE_URL}/api/model/info`);
+      const res = await fetch(`${getBaseUrl()}/api/model/info`);
       if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
@@ -334,7 +353,7 @@ export async function fetchModelInfo(): Promise<any> {
 export async function downloadCsvReport(): Promise<void> {
   const isServer = await checkServerAvailability();
   if (isServer) {
-    window.open(`${BASE_URL}/api/reports/csv`, '_blank');
+    window.open(`${getBaseUrl()}/api/reports/csv`, '_blank');
     return;
   }
 
@@ -383,7 +402,7 @@ export async function downloadCsvReport(): Promise<void> {
 export async function downloadPdfReport(id: string): Promise<void> {
   const isServer = await checkServerAvailability();
   if (isServer) {
-    window.open(`${BASE_URL}/api/reports/pdf/${id}`, '_blank');
+    window.open(`${getBaseUrl()}/api/reports/pdf/${id}`, '_blank');
     return;
   }
 
