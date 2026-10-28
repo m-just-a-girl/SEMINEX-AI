@@ -10,7 +10,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { TransparencyBadge } from '../components/TransparencyBadge';
-import { fetchInspectionHistory } from '../api/client';
+import { fetchInspectionHistory, downloadCsvReport, downloadPdfReport } from '../api/client';
 import { InspectionHistoryItem } from '../types';
 
 interface HistoryPageProps {
@@ -48,11 +48,11 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectInspection }) 
   }, [search, category, status]);
 
   const handleDownloadCsv = () => {
-    window.open('/api/reports/csv', '_blank');
+    downloadCsvReport();
   };
 
   const handleDownloadPdf = (id: string) => {
-    window.open(`/api/reports/pdf/${id}`, '_blank');
+    downloadPdfReport(id);
   };
 
   return (

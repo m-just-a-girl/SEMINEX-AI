@@ -23,6 +23,7 @@ htmlcov/
 # Local databases & logs
 *.log
 seminex.db-journal
+reports/*.pdf
 
 # Large raw dataset files (WM-811K raw LSWMD.pkl is ~2GB)
 data/raw/LSWMD.pkl

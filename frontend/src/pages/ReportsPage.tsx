@@ -9,7 +9,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { TransparencyBadge } from '../components/TransparencyBadge';
-import { fetchInspectionHistory } from '../api/client';
+import { fetchInspectionHistory, downloadPdfReport, downloadCsvReport } from '../api/client';
 import { InspectionHistoryItem } from '../types';
 
 interface ReportsPageProps {
@@ -36,11 +36,11 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialInspectionId })
   }, [selectedId]);
 
   const handleDownloadPdf = (id: string) => {
-    window.open(`/api/reports/pdf/${id}`, '_blank');
+    downloadPdfReport(id);
   };
 
   const handleDownloadCsv = () => {
-    window.open('/api/reports/csv', '_blank');
+    downloadCsvReport();
   };
 
   const current = inspections.find((i) => i.id === selectedId) || inspections[0];
