@@ -77,15 +77,26 @@ export const WaferMapCanvas: React.FC<WaferMapCanvasProps> = ({
         const px = c * cellW;
         const py = r * cellH;
 
-        if (showDensity && densityMap && densityMap[r] && densityMap[r][c] !== undefined) {
-          const intensity = densityMap[r][c] / 100.0;
+        if (showDensity && densityMap && densityMap.length > 0) {
+          // Map (r, c) to density grid (whether densityMap is 10x10 or full resolution)
+          const dr = Math.min(densityMap.length - 1, Math.floor((r / rows) * densityMap.length));
+          const dc = Math.min(densityMap[dr].length - 1, Math.floor((c / cols) * densityMap[dr].length));
+          const rawDensity = densityMap[dr]?.[dc] ?? 0;
+          const intensity = rawDensity > 1 ? rawDensity / 100 : rawDensity;
+
           if (val === 2) {
-            ctx.fillStyle = '#EF4444';
-          } else if (intensity > 0.05) {
-            // Heatmap color gradient (cyan to orange/red)
-            ctx.fillStyle = `rgba(239, 68, 68, ${Math.min(0.9, intensity * 0.9 + 0.1)})`;
+            ctx.fillStyle = '#EF4444'; // Defect die
+          } else if (intensity > 0.02) {
+            // Hotspot gradient: cyan -> amber -> orange -> red
+            if (intensity > 0.5) {
+              ctx.fillStyle = `rgba(249, 115, 22, ${Math.min(0.95, intensity * 0.9 + 0.15)})`;
+            } else if (intensity > 0.2) {
+              ctx.fillStyle = `rgba(245, 158, 11, ${Math.min(0.85, intensity * 0.8 + 0.1)})`;
+            } else {
+              ctx.fillStyle = `rgba(6, 182, 212, ${Math.min(0.7, intensity * 0.7 + 0.1)})`;
+            }
           } else {
-            ctx.fillStyle = '#10B981';
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.45)'; // Passing baseline
           }
         } else {
           // Standard categorical wafer map
@@ -117,16 +128,24 @@ export const WaferMapCanvas: React.FC<WaferMapCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+
+    // Map mouse position from screen pixels through canvas zoom transform to wafer grid
+    const scaleFactor = canvas.width / rect.width;
+    const rawX = (e.clientX - rect.left) * scaleFactor;
+    const rawY = (e.clientY - rect.top) * scaleFactor;
+
+    const centerX = size / 2;
+    const centerY = size / 2;
+    const waferX = (rawX - centerX) / zoomLevel + centerX;
+    const waferY = (rawY - centerY) / zoomLevel + centerY;
 
     const rows = matrix.length;
     const cols = matrix[0].length;
     const cellW = size / cols;
     const cellH = size / rows;
 
-    const col = Math.floor(mouseX / cellW);
-    const row = Math.floor(mouseY / cellH);
+    const col = Math.floor(waferX / cellW);
+    const row = Math.floor(waferY / cellH);
 
     if (row >= 0 && row < rows && col >= 0 && col < cols) {
       setHoverDie({ x: col, y: row, val: matrix[row][col] });

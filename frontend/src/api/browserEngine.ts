@@ -881,6 +881,11 @@ export class BrowserEngine {
     const comp = payload.comparison_map;
     const size = Math.min(ref.length, comp.length);
 
+    const refSpatial = computeSpatialMetrics(ref);
+    const compSpatial = computeSpatialMetrics(comp);
+    const refPred = classifyWaferMap(ref, refSpatial);
+    const compPred = classifyWaferMap(comp, compSpatial);
+
     let matchingDies = 0;
     let refFailing = 0;
     let compFailing = 0;
@@ -906,12 +911,17 @@ export class BrowserEngine {
         if (rv === 2 && cv === 2) commonFailing++;
         if (rv === cv) matchingDies++;
 
-        if (rv !== 2 && cv === 2) {
-          row.push(1); // New defect in comparison
-        } else if (rv === 2 && cv !== 2) {
-          row.push(-1); // Defect resolved in comparison
+        // Value coding for WaferDifferenceCanvas:
+        // 0 = background or identical
+        // 1 = resolved in comparison (present in ref only)
+        // 2 = new defect in comparison (present in comp only)
+        // 3 = persistent defect (present in both ref and comp)
+        if (rv === 2 && cv !== 2) {
+          row.push(1); // Resolved in target
+        } else if (rv !== 2 && cv === 2) {
+          row.push(2); // New defect in target
         } else if (rv === 2 && cv === 2) {
-          row.push(2); // Persistent defect
+          row.push(3); // Persistent in both
         } else {
           row.push(0);
         }
@@ -919,26 +929,55 @@ export class BrowserEngine {
       diffMatrix.push(row);
     }
 
+    const union = refFailing + compFailing - commonFailing;
+    const spatialIoU = union > 0 ? Number((commonFailing / union).toFixed(4)) : 1.0;
     const diceSimilarity =
       refFailing + compFailing > 0
         ? Number(((2 * commonFailing) / (refFailing + compFailing)).toFixed(4))
         : 1.0;
     const dieMatchRate = totalWaferDies > 0 ? Number((matchingDies / totalWaferDies).toFixed(4)) : 1.0;
 
+    const failingDieDiff = compFailing - refFailing;
+    const yieldDiff = Number(((compSpatial.yield_rate - refSpatial.yield_rate) * 100).toFixed(2));
+    const failureRateDiff = Number(((compSpatial.failure_rate - refSpatial.failure_rate) * 100).toFixed(2));
+
     return {
       reference_id: payload.reference_id || 'REF-A',
       comparison_id: payload.comparison_id || 'COMP-B',
+      reference: {
+        id: payload.reference_id || 'REF-A',
+        predicted_class: refPred.predicted_class,
+        confidence: refPred.confidence,
+        spatial_metrics: refSpatial,
+      },
+      comparison: {
+        id: payload.comparison_id || 'COMP-B',
+        predicted_class: compPred.predicted_class,
+        confidence: compPred.confidence,
+        spatial_metrics: compSpatial,
+      },
+      comparison_delta: {
+        failing_die_diff: failingDieDiff,
+        failure_rate_diff: failureRateDiff,
+        yield_diff: yieldDiff,
+        spatial_iou: spatialIoU,
+        dice_similarity: diceSimilarity,
+        pattern_matched: refPred.predicted_class === compPred.predicted_class,
+        persistent_defect_count: commonFailing,
+        new_defect_count: compFailing - commonFailing,
+        resolved_defect_count: refFailing - commonFailing,
+      },
       dice_similarity: diceSimilarity,
       die_match_rate: dieMatchRate,
-      delta_failing_dies: compFailing - refFailing,
+      delta_failing_dies: failingDieDiff,
       common_failing_dies: commonFailing,
       new_failing_dies: compFailing - commonFailing,
       resolved_dies: refFailing - commonFailing,
       difference_map: diffMatrix,
       shift_summary:
-        diceSimilarity > 0.8
+        spatialIoU > 0.8
           ? 'High spatial pattern concordance across lots'
-          : diceSimilarity > 0.4
+          : spatialIoU > 0.3
           ? 'Moderate spatial overlap with localized variation'
           : 'Low concordance: pattern represents distinct failure mechanism',
     };
@@ -979,6 +1018,11 @@ export class BrowserEngine {
     };
   }
 
+  static getInspectionDetail(id: string): InspectionHistoryItem | null {
+    const list = getStoredHistory();
+    return list.find((i) => i.id === id) || null;
+  }
+
   static submitHumanReview(
     id: string,
     payload: {
@@ -992,8 +1036,13 @@ export class BrowserEngine {
     const idx = list.findIndex((i) => i.id === id);
     if (idx !== -1) {
       list[idx].review_status = payload.decision as any;
-      if (payload.corrected_category) list[idx].reviewed_category = payload.corrected_category;
-      if (payload.notes) list[idx].reviewer_notes = payload.notes;
+      if (payload.decision === 'corrected') {
+        list[idx].reviewed_category = payload.corrected_category || 'Center';
+      } else {
+        delete list[idx].reviewed_category;
+      }
+      // Explicitly allow clearing notes: if notes is provided (including empty string), persist it!
+      list[idx].reviewer_notes = payload.notes !== undefined ? payload.notes : '';
       list[idx].reviewed_at = new Date().toISOString();
       saveStoredHistory(list);
       return { success: true, updated: list[idx] };
@@ -1002,87 +1051,241 @@ export class BrowserEngine {
   }
 
   static askCopilot(query: string) {
-    const q = query.toLowerCase();
+    const q = (query || '').toLowerCase().trim();
     let answer = '';
-    let category: DefectCategory = 'none';
+    let category = 'Domain Intelligence';
+    let patternCategory: DefectCategory = 'none';
 
-    if (q.includes('center') || q.includes('bullseye')) {
-      category = 'Center';
+    // 1. Most common pattern / distribution
+    if (q.includes('most common') || q.includes('highest frequency') || q.includes('common pattern')) {
+      category = 'Dataset Statistics';
+      answer =
+        'Based on the benchmark WM-811K dataset (200 sample wafers), the defect classes are balanced across 9 categories (~22-25 wafers each) with **Edge-Ring** and **Center** having high representation in demonstration lot sweeps. In the full 811K dataset, "none" (nominal zero-defect) represents ~80% of all labelled wafer maps.';
+    }
+    // 2. How many labelled / records
+    else if (q.includes('how many') || q.includes('labelled') || q.includes('records') || q.includes('dataset size')) {
+      category = 'Dataset Inventory';
+      answer =
+        'The full WM-811K benchmark contains approximately **811,457 wafer maps** across **46,393 lots**, with **172,950 labelled maps** and 8 defect pattern categories plus "none". Currently in this demo environment, **200 benchmark wafers** across 8 lots (lot42000–lot42007) are loaded and ready for instantaneous inspection.';
+    }
+    // 3. Difference between Center and Donut
+    else if ((q.includes('difference') && (q.includes('center') || q.includes('donut'))) || (q.includes('center') && q.includes('donut'))) {
+      category = 'Pattern Comparison';
+      patternCategory = 'Center';
+      answer =
+        '**Center vs. Donut Difference:**\n- **Center Pattern:** High failure density concentrated strictly within the inner 35% wafer radius (r < 0.35 R). Typically caused by CMP polishing arm center overpressure or thermal chuck center non-uniformity.\n- **Donut Pattern:** Defect dies form an annular ring between 35% and 72% radial distance, while the center dies remain healthy. Typically caused by PECVD showerhead radial gas flow imbalances or spin-rinse-dry centrifugal fluid hold-up.';
+    }
+    // 4. Human review triage
+    else if (q.includes('human review') || q.includes('require review') || q.includes('triage') || q.includes('flagged')) {
+      category = 'Decision Support';
+      answer =
+        '**Inspections require Human Review when:**\n1. AI model confidence is below 80% or multiple classes have similar probabilities.\n2. High-severity spatial signatures are detected (e.g. `Scratch`, `Loc`, `Near-full`).\n3. Calculated wafer failure rate exceeds 15%.\n4. A lot exhibits sudden spatial defect clustering deviating from baseline yield.';
+    }
+    // 5. Limitations
+    else if (q.includes('limitation') || q.includes('limitations') || q.includes('accuracy boundary')) {
+      category = 'System Transparency';
+      answer =
+        '**Model Limitations & Governance:**\n- Predictions are derived strictly from 2D spatial die pass/fail topological patterns; the model does not independently measure thin-film electrical thickness or chemistry.\n- Root cause hypotheses are equipment engineering suggestions, not autonomous factory interventions.\n- In standalone browser mode, inferences are powered by heuristic spatial trees; full deep CNN inference connects via the Python FastAPI backend.';
+    }
+    // 6. Pattern specific questions
+    else if (q.includes('center') || q.includes('bullseye')) {
+      category = 'Defect Physics';
+      patternCategory = 'Center';
       answer =
         'Center defect patterns in WM-811K commonly originate from CMP polishing arm center overpressure, thermal gradients in rapid thermal processing (RTP), or exhaust vortices in spin-coating tracks. Investigate slurry feed distribution and chuck heating elements.';
     } else if (q.includes('ring') || q.includes('edge-ring') || q.includes('bevel')) {
-      category = 'Edge-Ring';
+      category = 'Defect Physics';
+      patternCategory = 'Edge-Ring';
       answer =
         'Edge-Ring patterns indicate circumferential failure near the wafer perimeter. Primary root causes include edge bead removal (EBR) nozzle over-dispense, electrostatic chuck focus ring erosion, or perimeter RF bias field distortion in plasma etch.';
     } else if (q.includes('scratch') || q.includes('track') || q.includes('line')) {
-      category = 'Scratch';
+      category = 'Defect Physics';
+      patternCategory = 'Scratch';
       answer =
         'Scratch patterns are characteristic continuous mechanical abrasions caused by robotic wafer transfer paddle contact, particle dragging across polishing pads during CMP, or manual handling tweezers. Check robot end-effector alignment and brush scrubber clean cycles.';
     } else if (q.includes('donut')) {
-      category = 'Donut';
+      category = 'Defect Physics';
+      patternCategory = 'Donut';
       answer =
         'Donut patterns feature an annular ring with healthy dies in the center and outer perimeter. This spatial signature is frequently caused by PECVD showerhead gas distribution anomalies, annular cooling zone defects, or spin rinse dry (SRD) centrifugal fluid hold-up.';
     } else if (q.includes('edge-loc')) {
-      category = 'Edge-Loc';
+      category = 'Defect Physics';
+      patternCategory = 'Edge-Loc';
       answer =
         'Edge-Loc indicates localized defect clustering along one edge sector. Frequent root causes include FOUP cassette slot rubbing, robotic pre-aligner pin contact, or asymmetric process chamber gas flow.';
+    } else if (q.includes('near-full')) {
+      category = 'Defect Physics';
+      patternCategory = 'Near-full';
+      answer =
+        'Near-full patterns indicate catastrophic wafer failure (>60% failing dies). Common root causes include gross misprocessing, complete photolithography defocus, or power interrupt during critical chemical vapor deposition.';
+    } else if (q.includes('loc')) {
+      category = 'Defect Physics';
+      patternCategory = 'Loc';
+      answer =
+        'Loc (Localized cluster) signifies an interior hotspot away from edges. Potential root causes include localized particulate contamination, condensation drips from the chamber lid, or reticle defect repeaters.';
     } else if (q.includes('yield') || q.includes('forecast')) {
+      category = 'Predictive Quality';
       answer =
         'Batch yield forecasting combines spatial pattern severity, multi-factor defect cluster counts, and historical lot yield variance. SEMI NEX AI predicts nominal baseline lots 42000-42004 will sustain >94.5% yield, while lots with recurring Edge-Ring patterns exhibit ~12.4% yield degradation.';
     } else {
+      category = 'General Help';
       answer =
         'SEMI NEX AI inspects 2D semiconductor wafer maps using WM-811K spatial patterns. We classify defects into 9 categories (none, Center, Donut, Edge-Loc, Edge-Ring, Loc, Random, Near-full, Scratch), compute SEMI E142 spatial metrics, quantify yield risk, and provide explainable decision support.';
     }
 
     return {
       query,
+      answer,
       response: answer,
+      category,
+      source: 'SEMI NEX AI Copilot Intelligence Core',
       suggested_actions: [
         'Inspect high-risk wafer in Inspection Studio',
         'Compare against baseline lot nominal wafer',
         'Download PDF inspection certificate',
       ],
-      associated_pattern: category,
+      associated_pattern: patternCategory,
       timestamp: new Date().toISOString(),
     };
   }
 
   static getForecast() {
+    const lots = Array.from(new Set(BENCHMARK_SAMPLES.map((s) => s.lot_name))).sort();
+    const lotStats = lots.map((lot) => {
+      const wafers = BENCHMARK_SAMPLES.filter((s) => s.lot_name === lot);
+      const yields = wafers.map((w) => {
+        let tot = 0;
+        let fail = 0;
+        for (const row of w.wafer_map) {
+          for (const cell of row) {
+            if (cell > 0) tot++;
+            if (cell === 2) fail++;
+          }
+        }
+        return tot > 0 ? (1 - fail / tot) * 100 : 100;
+      });
+      const meanYield = yields.length > 0 ? yields.reduce((a, b) => a + b, 0) / yields.length : 95.0;
+      return {
+        lot_name: lot,
+        wafer_count: wafers.length,
+        mean_yield: Math.round(meanYield * 10) / 10,
+        mean_defect_rate: Math.round((100 - meanYield) * 10) / 10,
+      };
+    });
+
+    const yieldVals = lotStats.map((l) => l.mean_yield);
+    const recent = yieldVals.slice(-3);
+    const baselineMa = recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 95.0;
+    const slope =
+      yieldVals.length >= 2
+        ? (yieldVals[yieldVals.length - 1] - yieldVals[0]) / Math.max(1, yieldVals.length - 1)
+        : -0.1;
+    const lastYield = yieldVals[yieldVals.length - 1] || 95.0;
+
+    const forecastHorizon = [1, 2, 3].map((step) => {
+      const proj = Math.max(80.0, Math.min(99.5, Math.round((lastYield + slope * step) * 10) / 10));
+      const uncert = Math.round(0.4 * step * 10) / 10;
+      return {
+        forecast_lot: `lot${42000 + lotStats.length + step}`,
+        projected_yield: proj,
+        uncertainty_lower: Math.round((proj - uncert) * 10) / 10,
+        uncertainty_upper: Math.round((proj + uncert) * 10) / 10,
+        baseline_comparison: Math.round(baselineMa * 10) / 10,
+        alert_status: proj < 96.0 ? 'Warning' : 'Stable',
+      };
+    });
+
     return {
-      current_baseline_yield: 0.948,
-      predicted_lot_yield: 0.932,
-      confidence_interval: [0.915, 0.949],
-      trend: 'stable',
-      lot_forecasts: [
-        { lot_name: 'lot42000', actual_yield: 0.962, predicted_yield: 0.958, status: 'Completed' },
-        { lot_name: 'lot42001', actual_yield: 0.941, predicted_yield: 0.945, status: 'Completed' },
-        { lot_name: 'lot42002', actual_yield: 0.953, predicted_yield: 0.951, status: 'Completed' },
-        { lot_name: 'lot42003', actual_yield: 0.912, predicted_yield: 0.918, status: 'Flagged (Edge-Ring)' },
-        { lot_name: 'lot42004', actual_yield: 0.957, predicted_yield: 0.954, status: 'Completed' },
-        { lot_name: 'lot42005', actual_yield: 0.948, predicted_yield: 0.946, status: 'In Inspection' },
-        { lot_name: 'lot42006', actual_yield: null, predicted_yield: 0.938, status: 'Queued' },
-        { lot_name: 'lot42007', actual_yield: null, predicted_yield: 0.942, status: 'Queued' },
-      ],
+      framework_label: 'Prototype Data-Driven Forecast',
+      methodology: '3-Period Autoregressive Moving Average with Linear Drift',
+      forecasting_horizon_lots: 3,
+      historical_lot_count: lotStats.length,
+      historical_series: lotStats,
+      forecast_series: forecastHorizon,
+      baseline_moving_avg: Math.round(baselineMa * 10) / 10,
+      limitations:
+        'Dataset records do not contain chronological factory timestamps. Lot sequencing assumes canonical lot numbering (lotN -> lotN+1). Professional fabrication SPC validation required before production line adjustments.',
+      current_baseline_yield: Math.round(baselineMa * 10) / 1000,
+      predicted_lot_yield: Math.round(forecastHorizon[0].projected_yield * 10) / 1000,
+      lot_forecasts: lotStats.map((l) => ({
+        lot_name: l.lot_name,
+        actual_yield: l.mean_yield / 100,
+        predicted_yield: l.mean_yield / 100,
+        status: 'Completed',
+      })),
     };
   }
 
   static getBatchAnalytics() {
+    const lots = Array.from(new Set(BENCHMARK_SAMPLES.map((s) => s.lot_name))).sort();
+    const classTotals: Record<string, number> = {};
+    for (const c of PATTERN_CLASSES) {
+      classTotals[c] = 0;
+    }
+
+    const lotSummaries = lots.map((lot) => {
+      const wafers = BENCHMARK_SAMPLES.filter((s) => s.lot_name === lot);
+      const lotClasses: Record<string, number> = {};
+      for (const c of PATTERN_CLASSES) {
+        lotClasses[c] = 0;
+      }
+
+      const yields: number[] = [];
+      for (const w of wafers) {
+        const lbl = (w.original_label || 'none') as DefectCategory;
+        if (lotClasses[lbl] !== undefined) {
+          lotClasses[lbl]++;
+          classTotals[lbl]++;
+        }
+
+        let tot = 0;
+        let fail = 0;
+        for (let r = 0; r < w.wafer_map.length; r++) {
+          for (let c = 0; c < w.wafer_map[r].length; c++) {
+            const v = w.wafer_map[r][c];
+            if (v > 0) {
+              tot++;
+              if (v === 2) fail++;
+            }
+          }
+        }
+        const yVal = tot > 0 ? Number(((1 - fail / tot) * 100).toFixed(2)) : 100.0;
+        yields.push(yVal);
+      }
+
+      const meanYield = Number((yields.reduce((a, b) => a + b, 0) / Math.max(1, yields.length)).toFixed(2));
+      const minYield = Number(Math.min(...yields).toFixed(2));
+      const maxYield = Number(Math.max(...yields).toFixed(2));
+
+      return {
+        lot_name: lot,
+        wafer_count: wafers.length,
+        mean_yield: meanYield,
+        min_yield: minYield,
+        max_yield: maxYield,
+        pattern_distribution: lotClasses,
+      };
+    });
+
+    const paretoDistribution = Object.entries(classTotals).map(([name, count]) => ({
+      name,
+      count,
+      percentage: Number(((count / Math.max(1, BENCHMARK_SAMPLES.length)) * 100).toFixed(1)),
+    }));
+
+    const avgYield =
+      lotSummaries.length > 0
+        ? Number((lotSummaries.reduce((a, b) => a + b.mean_yield, 0) / lotSummaries.length).toFixed(2))
+        : 94.4;
+
     return {
-      total_wafers_processed: 200,
-      average_yield: 0.944,
-      total_defects_detected: 8420,
-      defect_rate: 0.056,
-      pareto_distribution: [
-        { name: 'none', count: 28, percentage: 14.0 },
-        { name: 'Edge-Ring', count: 25, percentage: 12.5 },
-        { name: 'Center', count: 24, percentage: 12.0 },
-        { name: 'Loc', count: 23, percentage: 11.5 },
-        { name: 'Edge-Loc', count: 22, percentage: 11.0 },
-        { name: 'Donut', count: 22, percentage: 11.0 },
-        { name: 'Scratch', count: 21, percentage: 10.5 },
-        { name: 'Random', count: 20, percentage: 10.0 },
-        { name: 'Near-full', count: 15, percentage: 7.5 },
-      ],
+      total_lots: lotSummaries.length,
+      total_wafers_analyzed: BENCHMARK_SAMPLES.length,
+      total_wafers_processed: BENCHMARK_SAMPLES.length,
+      average_yield: avgYield,
+      lot_summaries: lotSummaries,
+      global_pattern_totals: classTotals,
+      pareto_distribution: paretoDistribution,
     };
   }
 }

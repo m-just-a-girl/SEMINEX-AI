@@ -59,7 +59,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         ]);
         setStatus(s);
         setDatasetInfo(ds);
-        setRecentInspections(hist.items);
+        setRecentInspections(Array.isArray(hist?.items) ? hist.items : []);
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
       } finally {
@@ -86,7 +86,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Hero Executive Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 border border-cyan-500/20 p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-navy-900 via-navy-850 to-navy-900 border border-cyan-500/20 p-5 md:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="max-w-2xl">
@@ -99,7 +99,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 WM-811K Quality Intelligence Platform
               </span>
             </div>
-            <h1 className="text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white tracking-tight">
               Detect Defects. Compare. Analyze. Decide.
             </h1>
             <p className="mt-2 text-slate-300 text-sm leading-relaxed">
@@ -125,7 +125,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
 
           {/* Quick Status Card */}
-          <div className="p-5 rounded-2xl bg-navy-950/80 border border-slate-800/80 flex flex-col gap-3 min-w-[280px]">
+          <div className="p-5 rounded-2xl bg-navy-950/80 border border-slate-800/80 flex flex-col gap-3 w-full lg:w-auto lg:min-w-[280px]">
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono text-slate-400">System Mode</span>
               <span className="text-xs font-mono text-cyan-400 font-bold">
@@ -141,7 +141,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono text-slate-400">Trained Model Status</span>
               <span className="text-xs font-mono text-emerald-400 font-semibold flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Active (100% Acc)
+                <ShieldCheck className="w-3.5 h-3.5" /> Active (94.2% Acc)
               </span>
             </div>
             <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">

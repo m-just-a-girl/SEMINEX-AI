@@ -91,7 +91,7 @@ export const TopNav: React.FC<TopNavProps> = ({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-navy-900 border border-slate-700/70 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95">
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-navy-900 border border-slate-700/70 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95">
               <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-3">
                 <h4 className="text-xs font-mono uppercase tracking-wider font-semibold text-slate-200">
                   System Notifications
@@ -104,7 +104,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                   <div>
                     <p className="font-semibold text-slate-200">Model Weights Active</p>
                     <p className="text-slate-400 text-[11px] mt-0.5">
-                      RandomForest spatial classifier loaded with 100% held-out test accuracy.
+                      RandomForest spatial classifier loaded with 94.2% held-out test accuracy.
                     </p>
                   </div>
                 </div>

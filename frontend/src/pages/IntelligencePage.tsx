@@ -22,6 +22,11 @@ export const IntelligencePage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const toPercent = (val: number | undefined | null, fallback: number = 0): number => {
+    if (val == null) return fallback;
+    return Number(val <= 1 ? (val * 100).toFixed(1) : Number(val).toFixed(1));
+  };
+
   useEffect(() => {
     async function load() {
       try {
@@ -179,7 +184,7 @@ export const IntelligencePage: React.FC = () => {
                 <div className="text-right font-mono text-xs">
                   <div className="text-slate-400">Wafer Yield</div>
                   <div className="text-2xl font-bold text-emerald-400">
-                    {selectedWafer.spatial_metrics?.yield_rate || 98.2}%
+                    {toPercent(selectedWafer.spatial_metrics?.yield_rate, 98.2)}%
                   </div>
                 </div>
               </div>
@@ -205,14 +210,17 @@ export const IntelligencePage: React.FC = () => {
                         <div className="flex justify-between text-slate-400 mb-1">
                           <span>Inner Core (r &lt; 0.35 R):</span>
                           <span className="text-slate-200 font-bold">
-                            {selectedWafer.spatial_metrics?.radial_distribution?.inner ?? 0}%
+                            {toPercent(selectedWafer.spatial_metrics?.radial_distribution?.inner)}%
                           </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                           <div
                             className="h-full bg-cyan-400"
                             style={{
-                              width: `${selectedWafer.spatial_metrics?.radial_distribution?.inner ?? 0}%`,
+                              width: `${Math.min(
+                                100,
+                                toPercent(selectedWafer.spatial_metrics?.radial_distribution?.inner)
+                              )}%`,
                             }}
                           />
                         </div>
@@ -222,14 +230,17 @@ export const IntelligencePage: React.FC = () => {
                         <div className="flex justify-between text-slate-400 mb-1">
                           <span>Middle Ring (0.35 R &lt; r &lt; 0.75 R):</span>
                           <span className="text-slate-200 font-bold">
-                            {selectedWafer.spatial_metrics?.radial_distribution?.middle ?? 0}%
+                            {toPercent(selectedWafer.spatial_metrics?.radial_distribution?.middle)}%
                           </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                           <div
                             className="h-full bg-blue-400"
                             style={{
-                              width: `${selectedWafer.spatial_metrics?.radial_distribution?.middle ?? 0}%`,
+                              width: `${Math.min(
+                                100,
+                                toPercent(selectedWafer.spatial_metrics?.radial_distribution?.middle)
+                              )}%`,
                             }}
                           />
                         </div>
@@ -239,14 +250,17 @@ export const IntelligencePage: React.FC = () => {
                         <div className="flex justify-between text-slate-400 mb-1">
                           <span>Outer Perimeter (r &gt; 0.75 R):</span>
                           <span className="text-slate-200 font-bold">
-                            {selectedWafer.spatial_metrics?.radial_distribution?.outer ?? 0}%
+                            {toPercent(selectedWafer.spatial_metrics?.radial_distribution?.outer)}%
                           </span>
                         </div>
                         <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                           <div
                             className="h-full bg-orange-400"
                             style={{
-                              width: `${selectedWafer.spatial_metrics?.radial_distribution?.outer ?? 0}%`,
+                              width: `${Math.min(
+                                100,
+                                toPercent(selectedWafer.spatial_metrics?.radial_distribution?.outer)
+                              )}%`,
                             }}
                           />
                         </div>
@@ -296,25 +310,25 @@ export const IntelligencePage: React.FC = () => {
                       <div className="p-2 rounded bg-navy-900">
                         <div className="text-[10px] text-slate-500">Q1 (Top-R)</div>
                         <div className="text-xs font-bold text-slate-200">
-                          {selectedWafer.spatial_metrics?.quadrant_distribution?.q1 ?? 0}%
+                          {toPercent(selectedWafer.spatial_metrics?.quadrant_distribution?.q1)}%
                         </div>
                       </div>
                       <div className="p-2 rounded bg-navy-900">
                         <div className="text-[10px] text-slate-500">Q2 (Top-L)</div>
                         <div className="text-xs font-bold text-slate-200">
-                          {selectedWafer.spatial_metrics?.quadrant_distribution?.q2 ?? 0}%
+                          {toPercent(selectedWafer.spatial_metrics?.quadrant_distribution?.q2)}%
                         </div>
                       </div>
                       <div className="p-2 rounded bg-navy-900">
                         <div className="text-[10px] text-slate-500">Q3 (Bot-L)</div>
                         <div className="text-xs font-bold text-slate-200">
-                          {selectedWafer.spatial_metrics?.quadrant_distribution?.q3 ?? 0}%
+                          {toPercent(selectedWafer.spatial_metrics?.quadrant_distribution?.q3)}%
                         </div>
                       </div>
                       <div className="p-2 rounded bg-navy-900">
                         <div className="text-[10px] text-slate-500">Q4 (Bot-R)</div>
                         <div className="text-xs font-bold text-slate-200">
-                          {selectedWafer.spatial_metrics?.quadrant_distribution?.q4 ?? 0}%
+                          {toPercent(selectedWafer.spatial_metrics?.quadrant_distribution?.q4)}%
                         </div>
                       </div>
                     </div>

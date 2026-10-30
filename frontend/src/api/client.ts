@@ -5,7 +5,12 @@ import {
   InspectionResult,
   InspectionHistoryItem,
 } from '../types';
-import { BrowserEngine, generatePatternArray } from './browserEngine';
+import {
+  BrowserEngine,
+  generatePatternArray,
+  computeSpatialMetrics,
+  classifyWaferMap,
+} from './browserEngine';
 
 export function getBaseUrl(): string {
   try {
@@ -33,11 +38,38 @@ export async function checkServerAvailability(): Promise<boolean> {
   const base = getBaseUrl();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1800);
-    const res = await fetch(`${base}/api/status`, { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${base}/api/status`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
-    serverCheckCache = res.ok;
-    return serverCheckCache;
+
+    if (!res.ok) {
+      serverCheckCache = false;
+      return false;
+    }
+
+    // Verify it is true JSON and not an HTML 200 catch-all SPA page
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.toLowerCase().includes('application/json')) {
+      serverCheckCache = false;
+      return false;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (
+      data &&
+      typeof data === 'object' &&
+      (data.app_name === 'SEMI NEX AI' || data.status === 'online') &&
+      typeof data.total_dataset_records === 'number'
+    ) {
+      serverCheckCache = true;
+      return true;
+    }
+
+    serverCheckCache = false;
+    return false;
   } catch {
     serverCheckCache = false;
     return false;
@@ -191,12 +223,24 @@ export async function fetchInspectionHistory(params: {
       if (params.category) searchParams.set('category', params.category);
 
       const res = await fetch(`${getBaseUrl()}/api/history?${searchParams.toString()}`);
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.items)) {
+          return {
+            total: typeof data.total === 'number' ? data.total : data.items.length,
+            items: data.items,
+          };
+        }
+      }
     } catch (e) {
       serverCheckCache = false;
     }
   }
-  return BrowserEngine.getInspectionHistory(params);
+  const fallback = BrowserEngine.getInspectionHistory(params);
+  return {
+    total: fallback?.total ?? 0,
+    items: Array.isArray(fallback?.items) ? fallback.items : [],
+  };
 }
 
 export async function fetchInspectionDetail(id: string): Promise<any> {
@@ -209,8 +253,7 @@ export async function fetchInspectionDetail(id: string): Promise<any> {
       serverCheckCache = false;
     }
   }
-  const history = BrowserEngine.getInspectionHistory({ limit: 100 });
-  return history.items.find((i) => i.id === id) || null;
+  return BrowserEngine.getInspectionDetail(id);
 }
 
 export async function submitHumanReview(
@@ -296,10 +339,20 @@ export async function generateSyntheticWafer(category: string, size: number = 38
     }
   }
   const matrix = generatePatternArray(category as any, size, Math.floor(Math.random() * 100));
+  const spatial = computeSpatialMetrics(matrix);
+  const pred = classifyWaferMap(matrix, spatial);
   return {
     category,
     size,
+    label: 'DEMONSTRATION DATA — SYNTHETIC WAFER MAP',
     wafer_map: matrix,
+    spatial_metrics: spatial,
+    prediction: {
+      predicted_class: pred.predicted_class,
+      confidence: pred.confidence,
+      class_scores: pred.class_scores,
+      probabilities: pred.class_scores,
+    },
     is_synthetic: true,
   };
 }

@@ -40,13 +40,14 @@ export const CopilotPage: React.FC = () => {
 
     try {
       const res = await askCopilot(q);
+      const botText = res.answer || res.response || (typeof res === 'string' ? res : 'No response generated.');
       setMessages([
         ...newMsgs,
         {
           sender: 'bot',
-          text: res.answer,
-          category: res.category,
-          source: res.source,
+          text: botText,
+          category: res.category || (res.associated_pattern ? `Defect: ${res.associated_pattern}` : undefined),
+          source: res.source || 'SEMI NEX AI Engine',
         },
       ]);
     } catch (err) {

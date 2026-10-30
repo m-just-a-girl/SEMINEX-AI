@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={`fixed top-0 left-0 h-screen bg-navy-950/95 border-r border-slate-800/80 z-40 transition-all duration-300 flex flex-col ${
-        collapsed ? 'w-20' : 'w-72'
+        collapsed ? '-translate-x-full md:translate-x-0 md:w-20' : 'translate-x-0 w-72'
       }`}
     >
       {/* Brand Header */}

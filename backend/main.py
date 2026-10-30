@@ -375,9 +375,12 @@ def get_inspection_by_id(inspection_id: str):
 
 @app.post("/api/reviews/{inspection_id}")
 def submit_review(inspection_id: str, payload: Dict[str, Any]):
+    record = get_inspection(inspection_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Inspection record not found")
     decision = payload.get("decision", "confirmed")
     corrected = payload.get("corrected_category")
-    notes = payload.get("notes")
+    notes = payload.get("notes", "")
     reviewer = payload.get("reviewer_id", "Quality Engineer")
     
     success = update_review(inspection_id, decision, corrected, notes, reviewer)
@@ -385,9 +388,11 @@ def submit_review(inspection_id: str, payload: Dict[str, Any]):
 
 @app.post("/api/copilot")
 def copilot_query(payload: Dict[str, Any]):
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
     query = payload.get("query", "")
-    if not query:
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    if not isinstance(query, str) or not query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty and must be a text string")
     return process_copilot_query(query)
 
 @app.post("/api/synthetic/generate")

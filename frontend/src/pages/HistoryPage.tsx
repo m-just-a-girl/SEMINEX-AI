@@ -34,10 +34,13 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectInspection }) 
         category,
         status,
       });
-      setItems(res.items);
-      setTotal(res.total);
+      const safeItems = Array.isArray(res?.items) ? res.items : [];
+      setItems(safeItems);
+      setTotal(typeof res?.total === 'number' ? res.total : safeItems.length);
     } catch (err) {
       console.error('Failed to load history:', err);
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -56,7 +59,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectInspection }) 
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 w-full max-w-full overflow-hidden animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
         <div>
@@ -136,12 +139,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectInspection }) 
           )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-mono">
+        <div className="overflow-x-auto w-full max-w-full rounded-xl border border-slate-800">
+          <table className="w-full min-w-[720px] text-left text-xs font-mono">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
                 <th className="py-2.5 px-3">Inspection ID</th>
-                <th className="py-2.5 px-3">Timestamp (UTC)</th>
+                <th className="py-2.5 px-3">Timestamp (Local)</th>
                 <th className="py-2.5 px-3">Input Target</th>
                 <th className="py-2.5 px-3">Predicted Class</th>
                 <th className="py-2.5 px-3">Yield Rate</th>
@@ -151,74 +154,81 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onSelectInspection }) 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {items.map((item) => (
-                <tr key={item.id} className="hover:bg-navy-800/40 transition-colors">
-                  <td className="py-3 px-3 font-semibold text-slate-200">{item.id}</td>
-                  <td className="py-3 px-3 text-slate-400">
-                    {new Date(item.timestamp).toLocaleString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </td>
-                  <td className="py-3 px-3 text-slate-300">
-                    {item.record_id} ({item.lot_name})
-                  </td>
-                  <td className="py-3 px-3">
-                    <span className="font-bold text-cyan-400">{item.predicted_class}</span>
-                    <span className="text-[10px] text-slate-500 ml-1">
-                      ({Math.round(item.confidence * 100)}%)
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-emerald-400 font-bold">
-                    {Math.round((100 - item.failure_rate) * 10) / 10}%
-                  </td>
-                  <td className="py-3 px-3">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        item.recommendation === 'Investigation Recommended'
-                          ? 'bg-red-950 text-red-300 border border-red-500/30'
-                          : item.recommendation === 'Low Concern'
-                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
-                          : 'bg-amber-950 text-amber-300 border border-amber-500/30'
-                      }`}
-                    >
-                      {item.recommendation}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3">
-                    <span
-                      className={`capitalize ${
-                        item.review_status === 'confirmed'
-                          ? 'text-emerald-400 font-bold'
-                          : item.review_status === 'corrected'
-                          ? 'text-cyan-400 font-bold'
-                          : 'text-amber-400'
-                      }`}
-                    >
-                      {item.review_status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleDownloadPdf(item.id)}
-                        className="p-1 rounded text-slate-400 hover:text-cyan-300 hover:bg-navy-800"
-                        title="Download PDF Report"
+              {items.map((item) => {
+                const itemDate = item.timestamp ? new Date(item.timestamp) : null;
+                const dateStr =
+                  itemDate && !isNaN(itemDate.getTime())
+                    ? itemDate.toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'N/A';
+                const failRate = item.failure_rate != null ? Number(item.failure_rate) : 0;
+                const failPct = failRate <= 1 ? failRate * 100 : failRate;
+                const yieldPct = Math.max(0, Math.min(100, Math.round((100 - failPct) * 10) / 10));
+
+                return (
+                  <tr key={item.id} className="hover:bg-navy-800/40 transition-colors">
+                    <td className="py-3 px-3 font-semibold text-slate-200">{item.id || 'N/A'}</td>
+                    <td className="py-3 px-3 text-slate-400">{dateStr}</td>
+                    <td className="py-3 px-3 text-slate-300">
+                      {item.record_id || 'Unknown'} {item.lot_name ? `(${item.lot_name})` : ''}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="font-bold text-cyan-400">{item.predicted_class || 'none'}</span>
+                      <span className="text-[10px] text-slate-500 ml-1">
+                        ({Math.round((item.confidence || 0) * 100)}%)
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-emerald-400 font-bold">{yieldPct.toFixed(1)}%</td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                          item.recommendation === 'Investigation Recommended'
+                            ? 'bg-red-950 text-red-300 border border-red-500/30'
+                            : item.recommendation === 'Low Concern'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-amber-950 text-amber-300 border border-amber-500/30'
+                        }`}
                       >
-                        <FileText className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onSelectInspection(item.id)}
-                        className="text-cyan-400 hover:text-cyan-300 font-semibold"
+                        {item.recommendation || 'Low Concern'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`capitalize ${
+                          item.review_status === 'confirmed'
+                            ? 'text-emerald-400 font-bold'
+                            : item.review_status === 'corrected'
+                            ? 'text-cyan-400 font-bold'
+                            : 'text-amber-400'
+                        }`}
                       >
-                        Inspect &rarr;
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {item.review_status || 'pending'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleDownloadPdf(item.id)}
+                          className="p-1 rounded text-slate-400 hover:text-cyan-300 hover:bg-navy-800"
+                          title="Download PDF Report"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onSelectInspection(item.id)}
+                          className="text-cyan-400 hover:text-cyan-300 font-semibold"
+                        >
+                          Inspect &rarr;
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
