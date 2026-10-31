@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScanEye,
   Upload,
@@ -19,9 +19,9 @@ import { WaferMapCanvas } from '../components/WaferMapCanvas';
 import { TransparencyBadge } from '../components/TransparencyBadge';
 import {
   fetchDatasetSamples,
-  fetchInspectionDetail,
   runInspection,
   uploadAndInspect,
+  fetchInspectionDetail,
 } from '../api/client';
 import { WaferSample, InspectionResult, DefectCategory } from '../types';
 
@@ -43,15 +43,78 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
   const [inspectionStage, setInspectionStage] = useState<string>('');
   const [result, setResult] = useState<InspectionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const inFlightTargetRef = useRef<string | null>(null);
 
-  // Load sample dataset records
+  // Load sample dataset records and handle initialInspectionId
   useEffect(() => {
     async function load() {
       try {
         const data = await fetchDatasetSamples({ limit: 40 });
         setSamples(data.items);
-        if (data.items.length > 0 && !selectedSample && !initialInspectionId) {
+
+        if (initialInspectionId) {
+          const detail = await fetchInspectionDetail(initialInspectionId);
+          if (detail) {
+            // Restore inspection result view
+            const restoredMap = detail.wafer_map || (data.items[0] ? data.items[0].wafer_map : []);
+            setResult({
+              inspection_id: detail.id,
+              record_id: detail.record_id || detail.id,
+              lot_name: detail.lot_name || 'lot-unknown',
+              wafer_index: detail.wafer_index || 1,
+              original_label: detail.original_label || null,
+              timestamp: detail.timestamp,
+              input_source: detail.input_source,
+              prediction: {
+                predicted_class: detail.predicted_class,
+                confidence: detail.confidence,
+                class_scores: detail.class_scores || {},
+                model_version: detail.model_version,
+                model_mode: detail.model_mode,
+              },
+              spatial_metrics: {
+                total_die_count: detail.total_die_count,
+                failing_die_count: detail.failing_die_count,
+                passing_die_count: detail.total_die_count - detail.failing_die_count,
+                failure_rate: detail.failure_rate,
+                yield_rate: Math.round((100 - detail.failure_rate) * 100) / 100,
+                clusters: 1,
+                max_cluster_size: detail.failing_die_count,
+                radial_distribution: { inner: 0.33, middle: 0.33, outer: 0.34 },
+                quadrant_distribution: { q1: 0.25, q2: 0.25, q3: 0.25, q4: 0.25 },
+                mean_radial_distance: 0.5,
+                density_map: [],
+              },
+              decision_support: {
+                recommendation: (detail.recommendation as any) || 'Review Recommended',
+                recommendation_reason: detail.recommendation_reason || '',
+                risk_score: 50.0,
+                risk_tier: 'Moderate',
+                risk_framework: 'Prototype Risk Scoring Framework',
+                formula_description: 'Sum of weighted factors',
+                factors: {
+                  failure_rate_points: 20,
+                  cluster_density_points: 15,
+                  pattern_severity_points: 15,
+                  uncertainty_points: 0,
+                },
+                limitations: 'Demonstration risk model only.',
+              },
+              root_cause_hypothesis: {
+                title: detail.hypothesis || 'Inspection Analysis',
+                spatial_evidence: detail.recommendation_reason || '',
+                investigation_directions: ['Review manufacturing tool telemetry and recipe settings.'],
+                engineer_questions: ['Did equipment alarms trigger during this production lot?'],
+                verification_steps: ['Perform CD-SEM / metrology verification on defect dies.'],
+                disclaimer: 'Statistical hypothesis only.',
+              },
+              explanation_map: restoredMap,
+              wafer_map: restoredMap,
+            });
+            return;
+          }
+        }
+
+        if (data.items.length > 0 && !selectedSample) {
           setSelectedSample(data.items[0]);
         }
       } catch (err) {
@@ -59,52 +122,10 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
       }
     }
     load();
-  }, []);
-
-  // Sync initialInspectionId if provided (e.g. from History or Dashboard "Inspect" action)
-  useEffect(() => {
-    if (!initialInspectionId) return;
-    let cancelled = false;
-    async function loadInitial() {
-      try {
-        const detail = await fetchInspectionDetail(initialInspectionId!);
-        if (!detail || cancelled || !detail.wafer_map) return;
-        const sample: WaferSample = {
-          id: detail.record_id || detail.id,
-          record_id: detail.record_id || detail.id,
-          lot_name: detail.lot_name || 'unknown',
-          wafer_index: detail.wafer_index || 1,
-          die_size: detail.wafer_map.length || 38,
-          wafer_map: detail.wafer_map,
-          original_label: detail.original_label || detail.predicted_class || 'none',
-          is_synthetic: Boolean(detail.is_synthetic),
-        };
-        setSelectedSample(sample);
-        const res = await runInspection({
-          record_id: sample.record_id,
-          wafer_map: sample.wafer_map,
-          lot_name: sample.lot_name,
-          wafer_index: sample.wafer_index,
-          original_label: sample.original_label,
-          input_source: detail.input_source || 'Inspection History Record',
-        });
-        if (!cancelled) {
-          setResult(res);
-        }
-      } catch (e) {
-        console.error('Failed to load inspection detail for', initialInspectionId, e);
-      }
-    }
-    loadInitial();
-    return () => {
-      cancelled = true;
-    };
   }, [initialInspectionId]);
 
   const handleSelectSample = (sample: WaferSample) => {
-    inFlightTargetRef.current = null;
     setSelectedSample(sample);
-    setInspecting(false);
     setResult(null);
     setError(null);
   };
@@ -112,83 +133,62 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
   const handleLoadDemo = (category: DefectCategory) => {
     const found = samples.find((s) => s.original_label === category);
     if (found) {
-      inFlightTargetRef.current = null;
       setSelectedSample(found);
-      setInspecting(false);
-      setResult(null);
     }
     setActiveTab('demo');
+    setResult(null);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const uploadTargetId = `upload-${Date.now()}`;
-    inFlightTargetRef.current = uploadTargetId;
     setInspecting(true);
     setInspectionStage('1/6: Validating uploaded image format...');
     setError(null);
-    setResult(null);
 
     try {
       await sleep(350);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
       setInspectionStage('2/6: Preprocessing into discrete die matrix...');
       await sleep(350);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
       setInspectionStage('3/6: Running real model inference...');
       const inspResult = await uploadAndInspect(file);
       await sleep(300);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
       setInspectionStage('4/6: Analyzing spatial defect geometry...');
       await sleep(300);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
       setInspectionStage('5/6: Synthesizing explainability attribution...');
       await sleep(300);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
       setInspectionStage('6/6: Generating triage decision support...');
       await sleep(200);
-      if (inFlightTargetRef.current !== uploadTargetId) return;
-
-      const uploadedSample: WaferSample = {
-        id: inspResult.inspection_id,
-        record_id: inspResult.record_id,
-        lot_name: inspResult.lot_name,
-        wafer_index: inspResult.wafer_index,
+      setResult(inspResult);
+      // Synchronize selectedSample to match the uploaded image so subsequent runs inspect the upload
+      setSelectedSample({
+        id: file.name,
+        record_id: file.name,
+        lot_name: 'lot-uploaded',
+        wafer_index: 1,
         die_size: inspResult.spatial_metrics.total_die_count,
         original_label: null,
         wafer_map: inspResult.wafer_map,
         is_synthetic: false,
-        spatial_metrics: inspResult.spatial_metrics,
-      };
-      setSelectedSample(uploadedSample);
-      setResult(inspResult);
+      });
     } catch (err: any) {
-      if (inFlightTargetRef.current === uploadTargetId) {
-        setError(err.message || 'Image inspection failed');
-      }
+      setError(err.message || 'Image inspection failed');
     } finally {
-      if (inFlightTargetRef.current === uploadTargetId) {
-        setInspecting(false);
-      }
+      setInspecting(false);
     }
   };
 
   const executeInspection = async () => {
     if (!selectedSample) return;
-    const targetId = selectedSample.id || selectedSample.record_id;
-    inFlightTargetRef.current = targetId;
     setInspecting(true);
     setError(null);
     setInspectionStage('1/6: Validating wafer array geometry...');
 
     try {
       await sleep(250);
-      if (inFlightTargetRef.current !== targetId) return;
       setInspectionStage('2/6: Preprocessing 74 topological spatial features...');
       await sleep(300);
-      if (inFlightTargetRef.current !== targetId) return;
       setInspectionStage('3/6: Running model classification inference...');
       const res = await runInspection({
         record_id: selectedSample.record_id,
@@ -201,25 +201,17 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
           : 'WM-811K Raw Dataset',
       });
       await sleep(300);
-      if (inFlightTargetRef.current !== targetId) return;
       setInspectionStage('4/6: Calculating radial distributions & clusters...');
       await sleep(250);
-      if (inFlightTargetRef.current !== targetId) return;
       setInspectionStage('5/6: Formulating root-cause hypothesis...');
       await sleep(250);
-      if (inFlightTargetRef.current !== targetId) return;
       setInspectionStage('6/6: Generating decision recommendation...');
       await sleep(150);
-      if (inFlightTargetRef.current !== targetId) return;
       setResult(res);
     } catch (err: any) {
-      if (inFlightTargetRef.current === targetId) {
-        setError(err.message || 'Inspection failed');
-      }
+      setError(err.message || 'Inspection failed');
     } finally {
-      if (inFlightTargetRef.current === targetId) {
-        setInspecting(false);
-      }
+      setInspecting(false);
     }
   };
 
@@ -539,11 +531,7 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
                   densityMap={result.explanation_map}
                   size={280}
                   title="Wafer Defect Topography"
-                  subtitle={`${result.spatial_metrics.failing_die_count} Failing Dies • ${
-                    result.spatial_metrics.yield_rate <= 1
-                      ? (result.spatial_metrics.yield_rate * 100).toFixed(1)
-                      : result.spatial_metrics.yield_rate
-                  }% Yield`}
+                  subtitle={`${result.spatial_metrics.failing_die_count} Failing Dies • ${result.spatial_metrics.yield_rate}% Yield`}
                 />
 
                 {/* Decision Support & Risk Pill */}
@@ -581,17 +569,13 @@ export const InspectionPage: React.FC<InspectionPageProps> = ({
                     <div className="flex items-center justify-between text-slate-400">
                       <span>Inner / Core Density:</span>
                       <span className="text-slate-200">
-                        {result.spatial_metrics.radial_distribution.inner <= 1
-                          ? (result.spatial_metrics.radial_distribution.inner * 100).toFixed(1)
-                          : result.spatial_metrics.radial_distribution.inner}%
+                        {result.spatial_metrics.radial_distribution.inner}%
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-400">
                       <span>Outer / Edge Ring Density:</span>
                       <span className="text-slate-200">
-                        {result.spatial_metrics.radial_distribution.outer <= 1
-                          ? (result.spatial_metrics.radial_distribution.outer * 100).toFixed(1)
-                          : result.spatial_metrics.radial_distribution.outer}%
+                        {result.spatial_metrics.radial_distribution.outer}%
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-400">

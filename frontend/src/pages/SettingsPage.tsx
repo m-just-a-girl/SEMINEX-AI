@@ -11,26 +11,17 @@ import {
   CheckCircle2,
   Globe,
   Radio,
-  AlertTriangle,
 } from 'lucide-react';
 import { TransparencyBadge } from '../components/TransparencyBadge';
 import { getBaseUrl, setCustomApiUrl, checkServerAvailability } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
-  const [datasetPath, setDatasetPath] = useState(
-    () => localStorage.getItem('seminex_dataset_path') || 'data/raw/LSWMD.pkl'
-  );
-  const [modelWeightsPath, setModelWeightsPath] = useState(
-    () => localStorage.getItem('seminex_model_path') || 'models/seminex_classifier.pkl'
-  );
-  const [maxUploadMb, setMaxUploadMb] = useState<number>(() => {
-    const v = localStorage.getItem('seminex_max_upload_mb');
-    return v ? Math.min(50, Math.max(1, Number(v))) : 15;
-  });
+  const [datasetPath, setDatasetPath] = useState(() => localStorage.getItem('seminex_dataset_path') || 'data/raw/LSWMD.pkl');
+  const [modelWeightsPath, setModelWeightsPath] = useState(() => localStorage.getItem('seminex_model_weights_path') || 'models/seminex_classifier.pkl');
+  const [maxUploadMb, setMaxUploadMb] = useState(() => Number(localStorage.getItem('seminex_max_upload_mb')) || 15);
   const [cloudApiUrl, setCloudApiUrlState] = useState('');
   const [connStatus, setConnStatus] = useState<'checking' | 'connected' | 'offline' | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setCloudApiUrlState(getBaseUrl());
@@ -44,22 +35,16 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSave = () => {
-    setErrorMsg(null);
-    const uploadMb = Number(maxUploadMb);
-    if (isNaN(uploadMb) || uploadMb < 1 || uploadMb > 50) {
-      setErrorMsg('Max Image Upload Size must be between 1 MB and 50 MB.');
-      return;
-    }
-
+    const clampedUpload = Math.min(50, Math.max(1, maxUploadMb || 15));
+    setMaxUploadMb(clampedUpload);
+    setCustomApiUrl(cloudApiUrl);
     try {
       localStorage.setItem('seminex_dataset_path', datasetPath.trim());
-      localStorage.setItem('seminex_model_path', modelWeightsPath.trim());
-      localStorage.setItem('seminex_max_upload_mb', String(uploadMb));
+      localStorage.setItem('seminex_model_weights_path', modelWeightsPath.trim());
+      localStorage.setItem('seminex_max_upload_mb', String(clampedUpload));
     } catch {}
-
-    setCustomApiUrl(cloudApiUrl);
     setSaveMsg('Configuration and preferences saved successfully.');
-    setTimeout(() => setSaveMsg(null), 3500);
+    setTimeout(() => setSaveMsg(null), 3000);
   };
 
   return (
@@ -92,13 +77,6 @@ export const SettingsPage: React.FC = () => {
         <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs font-mono text-emerald-300 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           <span>{saveMsg}</span>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="p-4 rounded-xl bg-red-950/80 border border-red-500/40 text-xs font-mono text-red-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-red-400" />
-          <span>{errorMsg}</span>
         </div>
       )}
 

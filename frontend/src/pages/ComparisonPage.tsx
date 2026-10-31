@@ -134,7 +134,7 @@ export const ComparisonPage: React.FC = () => {
               Reference: {refWafer?.id}
             </span>
             <div className="text-[11px] text-slate-400 font-mono">
-              Class: {comparisonResult?.reference?.predicted_class || (refWafer?.original_label !== null && refWafer?.original_label !== undefined ? refWafer.original_label : 'Unlabelled')}
+              Class: {comparisonResult?.reference?.predicted_class || refWafer?.original_label || 'Unlabelled'}
             </div>
           </div>
           {refWafer && (
@@ -149,21 +149,13 @@ export const ComparisonPage: React.FC = () => {
             <div className="flex justify-between">
               <span>Failing Dies:</span>
               <span className="text-slate-200">
-                {comparisonResult?.reference?.spatial_metrics?.failing_die_count ??
-                  refWafer?.spatial_metrics?.failing_die_count ??
-                  0}
+                {comparisonResult?.reference?.spatial_metrics?.failing_die_count || 0}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Failure Rate:</span>
               <span className="text-slate-200">
-                {(() => {
-                  const fr =
-                    comparisonResult?.reference?.spatial_metrics?.failure_rate ??
-                    refWafer?.spatial_metrics?.failure_rate;
-                  if (fr === undefined || fr === null) return '0.00%';
-                  return fr <= 1 ? `${(fr * 100).toFixed(2)}%` : `${Number(fr).toFixed(2)}%`;
-                })()}
+                {comparisonResult?.reference?.spatial_metrics?.failure_rate || 0}%
               </span>
             </div>
           </div>
@@ -176,7 +168,7 @@ export const ComparisonPage: React.FC = () => {
               Topographical Difference Map
             </span>
             <div className="text-[11px] text-cyan-300 font-mono">
-              Spatial Jaccard IoU: {comparisonResult?.comparison_delta?.spatial_iou ?? 1.0}
+              Spatial Jaccard IoU: {comparisonResult?.comparison_delta?.spatial_iou ?? 0}
             </div>
           </div>
           {comparisonResult?.difference_map ? (
@@ -198,7 +190,7 @@ export const ComparisonPage: React.FC = () => {
               Target: {cmpWafer?.id}
             </span>
             <div className="text-[11px] text-slate-400 font-mono">
-              Class: {comparisonResult?.comparison?.predicted_class || (cmpWafer?.original_label !== null && cmpWafer?.original_label !== undefined ? cmpWafer.original_label : 'Unlabelled')}
+              Class: {comparisonResult?.comparison?.predicted_class || cmpWafer?.original_label || 'Unlabelled'}
             </div>
           </div>
           {cmpWafer && (
@@ -213,21 +205,13 @@ export const ComparisonPage: React.FC = () => {
             <div className="flex justify-between">
               <span>Failing Dies:</span>
               <span className="text-slate-200">
-                {comparisonResult?.comparison?.spatial_metrics?.failing_die_count ??
-                  cmpWafer?.spatial_metrics?.failing_die_count ??
-                  0}
+                {comparisonResult?.comparison?.spatial_metrics?.failing_die_count || 0}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Failure Rate:</span>
               <span className="text-slate-200">
-                {(() => {
-                  const fr =
-                    comparisonResult?.comparison?.spatial_metrics?.failure_rate ??
-                    cmpWafer?.spatial_metrics?.failure_rate;
-                  if (fr === undefined || fr === null) return '0.00%';
-                  return fr <= 1 ? `${(fr * 100).toFixed(2)}%` : `${Number(fr).toFixed(2)}%`;
-                })()}
+                {comparisonResult?.comparison?.spatial_metrics?.failure_rate || 0}%
               </span>
             </div>
           </div>

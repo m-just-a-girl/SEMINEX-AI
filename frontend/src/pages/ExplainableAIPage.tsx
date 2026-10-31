@@ -76,8 +76,8 @@ export const ExplainableAIPage: React.FC<ExplainableAIPageProps> = ({ initialRes
               <p className="text-xs text-slate-300 mt-1 max-w-xl">
                 The classification model evaluated 74 topological, radial, and density features.
                 {result.prediction.predicted_class === 'none'
-                  ? ' Attribution confirms uniform die passing rates with no abnormal spatial clustering detected across wafer zones.'
-                  : ` Attribution shows the pattern is driven by spatial defect concentration characteristic of ${result.prediction.predicted_class}.`}
+                  ? ' Attribution confirms uniform passing baseline with no localized spatial defect clusters.'
+                  : ' Attribution shows the pattern is driven by high spatial concentration in the identified zone.'}
               </p>
             </div>
             <div className="flex items-center gap-4 border-t md:border-t-0 md:border-l border-slate-800 pt-4 md:pt-0 md:pl-6 text-xs font-mono">

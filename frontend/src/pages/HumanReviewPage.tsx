@@ -36,10 +36,9 @@ export const HumanReviewPage: React.FC = () => {
         const detail = await fetchInspectionDetail(res.items[0].id);
         setSelectedItem(detail);
         setReviewerNotes(detail.reviewer_notes || '');
+        if (detail.reviewed_category) setCorrectedCategory(detail.reviewed_category);
+        else if (detail.predicted_class) setCorrectedCategory(detail.predicted_class);
         setDecision(detail.review_status === 'pending' ? 'confirmed' : detail.review_status);
-        if (detail.reviewed_category) {
-          setCorrectedCategory(detail.reviewed_category);
-        }
       }
     } catch (err) {
       console.error('Failed to load review items:', err);
@@ -55,8 +54,9 @@ export const HumanReviewPage: React.FC = () => {
       const detail = await fetchInspectionDetail(id);
       setSelectedItem(detail);
       setReviewerNotes(detail.reviewer_notes || '');
+      if (detail.reviewed_category) setCorrectedCategory(detail.reviewed_category);
+      else if (detail.predicted_class) setCorrectedCategory(detail.predicted_class);
       setDecision(detail.review_status === 'pending' ? 'confirmed' : detail.review_status);
-      setCorrectedCategory(detail.reviewed_category || 'Center');
       setSuccessMsg(null);
     } catch (err) {
       console.error('Failed to load item detail:', err);

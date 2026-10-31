@@ -25,13 +25,6 @@ export const RootCausePage: React.FC<RootCausePageProps> = ({ initialResult }) =
   );
 
   useEffect(() => {
-    if (initialResult) {
-      setResult(initialResult);
-      setSelectedPattern(initialResult.prediction.predicted_class);
-    }
-  }, [initialResult]);
-
-  useEffect(() => {
     async function loadSample() {
       if (!result) {
         try {
@@ -102,7 +95,7 @@ export const RootCausePage: React.FC<RootCausePageProps> = ({ initialResult }) =
                 <div className="text-slate-200 font-bold">{result.inspection_id}</div>
                 <div className="text-slate-400 mt-1">Failing Die Count:</div>
                 <div className="text-red-400 font-bold">
-                  {result.spatial_metrics.failing_die_count} dies ({result.spatial_metrics.failure_rate <= 1 ? (result.spatial_metrics.failure_rate * 100).toFixed(2) : Number(result.spatial_metrics.failure_rate).toFixed(2)}%)
+                  {result.spatial_metrics.failing_die_count} dies ({result.spatial_metrics.failure_rate}%)
                 </div>
               </div>
             </div>

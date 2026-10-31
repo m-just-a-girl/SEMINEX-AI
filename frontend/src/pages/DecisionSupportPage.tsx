@@ -10,7 +10,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { TransparencyBadge } from '../components/TransparencyBadge';
-import { fetchDatasetSamples, runInspection, fetchInspectionHistory } from '../api/client';
+import { fetchDatasetSamples, runInspection } from '../api/client';
 import { InspectionResult } from '../types';
 
 interface DecisionSupportPageProps {
@@ -21,37 +21,17 @@ export const DecisionSupportPage: React.FC<DecisionSupportPageProps> = ({ initia
   const [result, setResult] = useState<InspectionResult | null>(initialResult || null);
 
   useEffect(() => {
-    if (initialResult) {
-      setResult(initialResult);
-    }
-  }, [initialResult]);
-
-  useEffect(() => {
     async function load() {
       if (!result) {
         try {
-          const hist = await fetchInspectionHistory({ limit: 1 });
-          if (hist.items && hist.items.length > 0 && hist.items[0].wafer_map) {
+          const res = await fetchDatasetSamples({ limit: 1 });
+          if (res.items.length > 0) {
             const insp = await runInspection({
-              record_id: hist.items[0].record_id,
-              wafer_map: hist.items[0].wafer_map,
-              lot_name: hist.items[0].lot_name,
-              wafer_index: hist.items[0].wafer_index,
-              original_label: hist.items[0].original_label,
+              record_id: res.items[0].id,
+              wafer_map: res.items[0].wafer_map,
+              lot_name: res.items[0].lot_name,
             });
             setResult(insp);
-          } else {
-            const res = await fetchDatasetSamples({ limit: 1 });
-            if (res.items.length > 0) {
-              const insp = await runInspection({
-                record_id: res.items[0].id,
-                wafer_map: res.items[0].wafer_map,
-                lot_name: res.items[0].lot_name,
-                wafer_index: res.items[0].wafer_index,
-                original_label: res.items[0].original_label,
-              });
-              setResult(insp);
-            }
           }
         } catch (err) {
           console.error('Failed to load inspection for decision support:', err);
@@ -148,7 +128,7 @@ export const DecisionSupportPage: React.FC<DecisionSupportPageProps> = ({ initia
                   {ds.factors.failure_rate_points} pts
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  Based on {result.spatial_metrics.failure_rate <= 1 ? (result.spatial_metrics.failure_rate * 100).toFixed(1) : Number(result.spatial_metrics.failure_rate).toFixed(1)}% failing dies
+                  Based on {result.spatial_metrics.failure_rate}% failing dies
                 </div>
               </div>
 

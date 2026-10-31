@@ -1,7 +1,7 @@
 {
   "model_version": "v1.2.0-spatial-gbc",
   "architecture": "RandomForest Wafer Map Spatial Classifier (100 estimators, balanced)",
-  "trained_at": "2026-10-23T04:48:45.555287",
+  "trained_at": "2026-10-31T06:15:58.523153",
   "train_samples_count": 129,
   "test_samples_count": 43,
   "total_samples": 172,

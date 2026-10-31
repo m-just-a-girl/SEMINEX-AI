@@ -78,25 +78,22 @@ export const WaferMapCanvas: React.FC<WaferMapCanvasProps> = ({
         const py = r * cellH;
 
         if (showDensity && densityMap && densityMap.length > 0) {
-          // Map (r, c) to density grid (whether densityMap is 10x10 or full resolution)
-          const dr = Math.min(densityMap.length - 1, Math.floor((r / rows) * densityMap.length));
-          const dc = Math.min(densityMap[dr].length - 1, Math.floor((c / cols) * densityMap[dr].length));
-          const rawDensity = densityMap[dr]?.[dc] ?? 0;
-          const intensity = rawDensity > 1 ? rawDensity / 100 : rawDensity;
+          // Density map might be identical size or a binned 10x10 / 8x8 grid
+          const dRows = densityMap.length;
+          const dCols = densityMap[0].length;
+          const dr = Math.min(dRows - 1, Math.floor((r / rows) * dRows));
+          const dc = Math.min(dCols - 1, Math.floor((c / cols) * dCols));
+          const rawVal = densityMap[dr]?.[dc] ?? 0;
+          // Normalize intensity between 0 and 1 (values could be 0..1 or 0..100)
+          const intensity = rawVal > 1.0 ? rawVal / 100.0 : rawVal;
 
           if (val === 2) {
-            ctx.fillStyle = '#EF4444'; // Defect die
-          } else if (intensity > 0.02) {
-            // Hotspot gradient: cyan -> amber -> orange -> red
-            if (intensity > 0.5) {
-              ctx.fillStyle = `rgba(249, 115, 22, ${Math.min(0.95, intensity * 0.9 + 0.15)})`;
-            } else if (intensity > 0.2) {
-              ctx.fillStyle = `rgba(245, 158, 11, ${Math.min(0.85, intensity * 0.8 + 0.1)})`;
-            } else {
-              ctx.fillStyle = `rgba(6, 182, 212, ${Math.min(0.7, intensity * 0.7 + 0.1)})`;
-            }
+            ctx.fillStyle = '#EF4444';
+          } else if (intensity > 0.05) {
+            // Heatmap color gradient (cyan to orange/red)
+            ctx.fillStyle = `rgba(239, 68, 68, ${Math.min(0.9, intensity * 0.9 + 0.15)})`;
           } else {
-            ctx.fillStyle = 'rgba(16, 185, 129, 0.45)'; // Passing baseline
+            ctx.fillStyle = '#10B981';
           }
         } else {
           // Standard categorical wafer map
@@ -128,24 +125,20 @@ export const WaferMapCanvas: React.FC<WaferMapCanvasProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    // Map mouse position from screen pixels through canvas zoom transform to wafer grid
-    const scaleFactor = canvas.width / rect.width;
-    const rawX = (e.clientX - rect.left) * scaleFactor;
-    const rawY = (e.clientY - rect.top) * scaleFactor;
-
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const waferX = (rawX - centerX) / zoomLevel + centerX;
-    const waferY = (rawY - centerY) / zoomLevel + centerY;
+    // Transform mouse coordinates taking zoom into account around canvas center (size/2, size/2)
+    const transformedX = (mouseX - size / 2) / zoomLevel + size / 2;
+    const transformedY = (mouseY - size / 2) / zoomLevel + size / 2;
 
     const rows = matrix.length;
     const cols = matrix[0].length;
     const cellW = size / cols;
     const cellH = size / rows;
 
-    const col = Math.floor(waferX / cellW);
-    const row = Math.floor(waferY / cellH);
+    const col = Math.floor(transformedX / cellW);
+    const row = Math.floor(transformedY / cellH);
 
     if (row >= 0 && row < rows && col >= 0 && col < cols) {
       setHoverDie({ x: col, y: row, val: matrix[row][col] });

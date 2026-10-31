@@ -1,5 +1,6 @@
 import io
 import csv
+import html
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 from reportlab.lib.pagesizes import letter
@@ -90,31 +91,34 @@ def generate_pdf_report(inspection_data: Dict[str, Any]) -> bytes:
     story.append(Spacer(1, 10))
     story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#06B6D4'), spaceAfter=12))
 
+    def safe_p(text: Any, style=body_style) -> Paragraph:
+        return Paragraph(html.escape(str(text) if text is not None else "N/A"), style)
+
     # 2. Inspection Identification Table
     meta_table_data = [
         [
             Paragraph("<b>Inspection ID:</b>", body_style),
-            Paragraph(str(inspection_data.get("id", "N/A")), body_style),
+            safe_p(inspection_data.get("id")),
             Paragraph("<b>Model Version:</b>", body_style),
-            Paragraph(str(inspection_data.get("model_version", "v1.0.0")), body_style),
+            safe_p(inspection_data.get("model_version", "v1.0.0")),
         ],
         [
             Paragraph("<b>Timestamp:</b>", body_style),
-            Paragraph(str(inspection_data.get("timestamp", "N/A")), body_style),
+            safe_p(inspection_data.get("timestamp")),
             Paragraph("<b>Operating Mode:</b>", body_style),
-            Paragraph(f"<b>{inspection_data.get('model_mode', 'REAL INFERENCE')}</b>", body_style),
+            safe_p(inspection_data.get('model_mode', 'REAL INFERENCE')),
         ],
         [
             Paragraph("<b>Lot Identifier:</b>", body_style),
-            Paragraph(str(inspection_data.get("lot_name", "N/A")), body_style),
+            safe_p(inspection_data.get("lot_name")),
             Paragraph("<b>Wafer Index:</b>", body_style),
-            Paragraph(str(inspection_data.get("wafer_index", "N/A")), body_style),
+            safe_p(inspection_data.get("wafer_index")),
         ],
         [
             Paragraph("<b>Input Source:</b>", body_style),
-            Paragraph(str(inspection_data.get("input_source", "Dataset Record")), body_style),
+            safe_p(inspection_data.get("input_source", "Dataset Record")),
             Paragraph("<b>Original Dataset Label:</b>", body_style),
-            Paragraph(str(inspection_data.get("original_label", "Unlabeled")), body_style),
+            safe_p(inspection_data.get("original_label", "Unlabeled")),
         ],
     ]
     t_meta = Table(meta_table_data, colWidths=[100, 170, 120, 150])
@@ -152,9 +156,9 @@ def generate_pdf_report(inspection_data: Dict[str, Any]) -> bytes:
         ],
         [
             Paragraph("<b>Decision Justification:</b>", body_style),
-            Paragraph(str(inspection_data.get("recommendation_reason", "Standard triage criteria met.")), body_style),
+            safe_p(inspection_data.get("recommendation_reason", "Standard triage criteria met.")),
             Paragraph("<b>Human Notes:</b>", body_style),
-            Paragraph(str(inspection_data.get("reviewer_notes") or "No notes submitted."), body_style),
+            safe_p(inspection_data.get("reviewer_notes") or "No notes submitted."),
         ]
     ]
     t_decision = Table(decision_data, colWidths=[120, 150, 120, 150])
@@ -252,25 +256,30 @@ def export_inspections_to_csv(inspections: List[Dict[str, Any]]) -> str:
         "Reviewed Category",
         "Reviewer Notes"
     ])
+    def sanitize_field(val: Any) -> Any:
+        if isinstance(val, str) and val.startswith(("=", "+", "-", "@")):
+            return f"'{val}"
+        return val
+
     for item in inspections:
         writer.writerow([
-            item.get("id"),
-            item.get("timestamp"),
-            item.get("input_source"),
-            item.get("record_id"),
-            item.get("lot_name"),
+            sanitize_field(item.get("id")),
+            sanitize_field(item.get("timestamp")),
+            sanitize_field(item.get("input_source")),
+            sanitize_field(item.get("record_id")),
+            sanitize_field(item.get("lot_name")),
             item.get("wafer_index"),
-            item.get("original_label") or "",
-            item.get("predicted_class"),
+            sanitize_field(item.get("original_label") or ""),
+            sanitize_field(item.get("predicted_class")),
             item.get("confidence"),
-            item.get("model_version"),
-            item.get("model_mode"),
+            sanitize_field(item.get("model_version")),
+            sanitize_field(item.get("model_mode")),
             item.get("failing_die_count"),
             item.get("total_die_count"),
             item.get("failure_rate"),
-            item.get("recommendation"),
-            item.get("review_status"),
-            item.get("reviewed_category") or "",
-            item.get("reviewer_notes") or ""
+            sanitize_field(item.get("recommendation")),
+            sanitize_field(item.get("review_status")),
+            sanitize_field(item.get("reviewed_category") or ""),
+            sanitize_field(item.get("reviewer_notes") or "")
         ])
     return output.getvalue()

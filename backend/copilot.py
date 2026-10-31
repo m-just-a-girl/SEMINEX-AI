@@ -10,8 +10,6 @@ def process_copilot_query(query: str) -> Dict[str, Any]:
     Semiconductor Quality AI Copilot.
     Answers queries grounded in actual application data, dataset statistics, and model metadata.
     """
-    if not isinstance(query, str):
-        query = str(query or "")
     q = query.lower().strip()
     dataset_info = dataset_manager.get_dataset_info()
     history = list_inspections(limit=10)

@@ -55,7 +55,10 @@ def generate_prototype_lot_forecast(lot_name: str = "lot42000") -> Dict[str, Any
 
     # 3-lot forecasting horizon
     forecast_horizon = []
-    last_lot_idx = 42000 + len(lot_stats)
+    # Extract the numeric suffix of the last observed lot, or fallback
+    import re
+    match = re.search(r'\d+', lot_stats[-1]["lot_name"])
+    last_lot_num = int(match.group()) if match else (42000 + len(lot_stats) - 1)
     last_yield = yield_values[-1]
 
     for step in range(1, 4):
@@ -63,7 +66,7 @@ def generate_prototype_lot_forecast(lot_name: str = "lot42000") -> Dict[str, Any
         # Uncertainty band widens with forecast horizon
         uncertainty = round(0.4 * step, 2)
         forecast_horizon.append({
-            "forecast_lot": f"lot{last_lot_idx + step}",
+            "forecast_lot": f"lot{last_lot_num + step}",
             "projected_yield": projected_yield,
             "uncertainty_lower": round(projected_yield - uncertainty, 2),
             "uncertainty_upper": round(projected_yield + uncertainty, 2),

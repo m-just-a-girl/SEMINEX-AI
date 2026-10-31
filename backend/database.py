@@ -122,7 +122,7 @@ def get_inspection(inspection_id: str) -> Optional[Dict[str, Any]]:
             d["wafer_map"] = []
     return d
 
-def list_inspections(limit: int = 50, offset: int = 0, search: str = "", status: str = "", category: str = "") -> Dict[str, Any]:
+def list_inspections(limit: Optional[int] = 50, offset: int = 0, search: str = "", status: str = "", category: str = "") -> Dict[str, Any]:
     conn = get_connection()
     cursor = conn.cursor()
     query = "SELECT * FROM inspections WHERE 1=1"
@@ -142,8 +142,10 @@ def list_inspections(limit: int = 50, offset: int = 0, search: str = "", status:
     cursor.execute(count_query, params)
     total = cursor.fetchone()[0]
 
-    query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
+    query += " ORDER BY timestamp DESC"
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
@@ -163,6 +165,11 @@ def list_inspections(limit: int = 50, offset: int = 0, search: str = "", status:
 def update_review(inspection_id: str, decision: str, corrected_category: Optional[str] = None, notes: Optional[str] = None, reviewer_id: str = "Quality Engineer") -> bool:
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT id FROM inspections WHERE id = ?", (inspection_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return False
+
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
     UPDATE inspections
@@ -176,5 +183,7 @@ def update_review(inspection_id: str, decision: str, corrected_category: Optiona
     """, (inspection_id, now, decision, corrected_category, reviewer_id, notes))
 
     conn.commit()
+    conn.close()
+    return True
     conn.close()
     return True

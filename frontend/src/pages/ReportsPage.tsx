@@ -178,11 +178,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ initialInspectionId })
                     <b>Confidence:</b> {Math.round(current.confidence * 100)}%
                   </div>
                   <div>
-                    <b>Failure Rate:</b>{' '}
-                    {Number(current.failure_rate) <= 1
-                      ? (Number(current.failure_rate) * 100).toFixed(2)
-                      : Number(current.failure_rate).toFixed(2)}
-                    %
+                    <b>Failure Rate:</b> {current.failure_rate}%
                   </div>
                   <div>
                     <b>Recommendation:</b> <b>{current.recommendation}</b>

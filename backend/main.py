@@ -199,11 +199,25 @@ def inspect_wafer(payload: Dict[str, Any]):
 @app.post("/api/inspect/upload")
 async def upload_and_inspect(file: UploadFile = File(...)):
     """Uploads wafer map image (PNG/JPEG) and processes into discrete die map."""
-    contents = await file.read()
+    # Bounded read to prevent memory exhaustion / DoS (max 10MB)
+    MAX_FILE_BYTES = 10 * 1024 * 1024
+    contents = await file.read(MAX_FILE_BYTES + 1)
+    if len(contents) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum image size is 10MB.")
+
     try:
-        image = Image.open(io.BytesIO(contents)).convert("L")
+        image = Image.open(io.BytesIO(contents))
+        # Validate format is PNG or JPEG
+        if image.format not in ("PNG", "JPEG", "JPG"):
+            raise HTTPException(status_code=400, detail="Only PNG and JPEG formats are supported.")
+        # Ensure dimensions do not exceed safe decomp limits (max 4096 x 4096)
+        if image.width > 4096 or image.height > 4096:
+            raise HTTPException(status_code=400, detail="Image dimensions exceed maximum allowed limit (4096x4096px).")
+        image = image.convert("L")
+    except HTTPException:
+        raise
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image file")
+        raise HTTPException(status_code=400, detail="Invalid image file or unsupported encoding.")
 
     # Resize to standard 38x38 wafer map
     img_resized = image.resize((38, 38), Image.Resampling.NEAREST)
@@ -375,30 +389,34 @@ def get_inspection_by_id(inspection_id: str):
 
 @app.post("/api/reviews/{inspection_id}")
 def submit_review(inspection_id: str, payload: Dict[str, Any]):
-    record = get_inspection(inspection_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Inspection record not found")
     decision = payload.get("decision", "confirmed")
     corrected = payload.get("corrected_category")
-    notes = payload.get("notes", "")
+    notes = payload.get("notes")
     reviewer = payload.get("reviewer_id", "Quality Engineer")
     
     success = update_review(inspection_id, decision, corrected, notes, reviewer)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Inspection record '{inspection_id}' not found.")
     return {"status": "success", "inspection_id": inspection_id, "decision": decision}
 
 @app.post("/api/copilot")
 def copilot_query(payload: Dict[str, Any]):
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
-    query = payload.get("query", "")
+    query = payload.get("query")
     if not isinstance(query, str) or not query.strip():
-        raise HTTPException(status_code=400, detail="Query cannot be empty and must be a text string")
-    return process_copilot_query(query)
+        raise HTTPException(status_code=400, detail="Query must be a non-empty string.")
+    return process_copilot_query(query.strip())
 
 @app.post("/api/synthetic/generate")
 def generate_synthetic(payload: Dict[str, Any]):
     category = payload.get("category", "Center")
-    size = payload.get("size", 38)
+    if category not in PATTERN_CLASSES:
+        raise HTTPException(status_code=400, detail=f"Invalid category '{category}'. Supported: {PATTERN_CLASSES}")
+    try:
+        size = int(payload.get("size", 38))
+        if size < 16 or size > 128:
+            raise ValueError()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Wafer size must be an integer between 16 and 128.")
     matrix = dataset_manager.generate_pattern_array(category, size=size)
     spatial = analyze_wafer_spatial(matrix)
     pred = model_service.predict(matrix)
@@ -427,7 +445,7 @@ def download_pdf_report(inspection_id: str):
 
 @app.get("/api/reports/csv")
 def download_csv_report():
-    history = list_inspections(limit=1000)
+    history = list_inspections(limit=None)
     csv_str = export_inspections_to_csv(history["items"])
     return Response(
         content=csv_str,

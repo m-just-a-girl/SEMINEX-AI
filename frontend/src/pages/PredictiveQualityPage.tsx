@@ -36,27 +36,21 @@ export const PredictiveQualityPage: React.FC = () => {
   // Merge historical and forecast for combined chart
   const combinedSeries = [];
   if (forecastData) {
-    const historical = Array.isArray(forecastData.historical_series)
-      ? forecastData.historical_series
-      : [];
-    for (const h of historical) {
+    for (const h of forecastData.historical_series) {
       combinedSeries.push({
         lot: h.lot_name,
-        actualYield: h.mean_yield ?? (h.actual_yield ? h.actual_yield * 100 : 95.0),
-        baseline: forecastData.baseline_moving_avg ?? 95.0,
+        actualYield: h.mean_yield,
+        baseline: forecastData.baseline_moving_avg,
         type: 'Historical',
       });
     }
-    const forecast = Array.isArray(forecastData.forecast_series)
-      ? forecastData.forecast_series
-      : [];
-    for (const f of forecast) {
+    for (const f of forecastData.forecast_series) {
       combinedSeries.push({
-        lot: f.forecast_lot || f.lot_name,
-        projectedYield: f.projected_yield ?? (f.predicted_yield ? f.predicted_yield * 100 : 94.0),
+        lot: f.forecast_lot,
+        projectedYield: f.projected_yield,
         lowerBound: f.uncertainty_lower,
         upperBound: f.uncertainty_upper,
-        baseline: forecastData.baseline_moving_avg ?? 95.0,
+        baseline: forecastData.baseline_moving_avg,
         type: 'Forecast',
       });
     }
@@ -148,7 +142,7 @@ export const PredictiveQualityPage: React.FC = () => {
 
           {/* 3-Lot Horizon Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {(forecastData.forecast_series || []).map((item: any, idx: number) => (
+            {forecastData.forecast_series.map((item: any, idx: number) => (
               <div
                 key={item.forecast_lot}
                 className="p-5 rounded-2xl bg-navy-900/70 border border-slate-800 space-y-3"

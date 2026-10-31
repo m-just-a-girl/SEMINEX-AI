@@ -27,12 +27,7 @@ import { AboutPage } from './pages/AboutPage';
 
 export const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 768;
-    }
-    return false;
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<InspectionResult | null>(null);
@@ -53,9 +48,6 @@ export const App: React.FC = () => {
 
   const handleNavigate = (pageId: PageId, param?: any) => {
     setCurrentPage(pageId);
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setSidebarCollapsed(true);
-    }
     if (pageId === 'inspection' && typeof param === 'string') {
       setSelectedInspectionId(param);
     } else if (typeof param === 'object' && param !== null) {
@@ -132,14 +124,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-navy-950 text-slate-100 flex">
-      {/* Mobile Backdrop */}
-      {!sidebarCollapsed && (
-        <div
-          className="fixed inset-0 bg-navy-950/70 backdrop-blur-sm z-30 md:hidden"
-          onClick={() => setSidebarCollapsed(true)}
-        />
-      )}
-
       {/* Sidebar Navigation */}
       <Sidebar
         currentPage={currentPage}
@@ -161,7 +145,7 @@ export const App: React.FC = () => {
           onToggleSidebarMobile={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
-        <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto p-4 md:p-8 pb-16 overflow-x-hidden">
+        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto pb-16">
           {renderCurrentPage()}
         </main>
       </div>

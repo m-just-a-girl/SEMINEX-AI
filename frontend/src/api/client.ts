@@ -5,12 +5,7 @@ import {
   InspectionResult,
   InspectionHistoryItem,
 } from '../types';
-import {
-  BrowserEngine,
-  generatePatternArray,
-  computeSpatialMetrics,
-  classifyWaferMap,
-} from './browserEngine';
+import { BrowserEngine, generatePatternArray, computeSpatialMetrics, classifyWaferMap } from './browserEngine';
 
 export function getBaseUrl(): string {
   try {
@@ -38,38 +33,21 @@ export async function checkServerAvailability(): Promise<boolean> {
   const base = getBaseUrl();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch(`${base}/api/status`, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    const res = await fetch(`${base}/api/status`, { signal: controller.signal });
     clearTimeout(timeoutId);
-
     if (!res.ok) {
       serverCheckCache = false;
       return false;
     }
-
-    // Verify it is true JSON and not an HTML 200 catch-all SPA page
     const contentType = res.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().includes('application/json')) {
+    if (!contentType.includes('application/json')) {
       serverCheckCache = false;
       return false;
     }
-
-    const data = await res.json().catch(() => null);
-    if (
-      data &&
-      typeof data === 'object' &&
-      (data.app_name === 'SEMI NEX AI' || data.status === 'online') &&
-      typeof data.total_dataset_records === 'number'
-    ) {
-      serverCheckCache = true;
-      return true;
-    }
-
-    serverCheckCache = false;
-    return false;
+    const json = await res.json();
+    serverCheckCache = Boolean(json && (json.status === 'online' || json.app_name));
+    return serverCheckCache;
   } catch {
     serverCheckCache = false;
     return false;
@@ -223,24 +201,12 @@ export async function fetchInspectionHistory(params: {
       if (params.category) searchParams.set('category', params.category);
 
       const res = await fetch(`${getBaseUrl()}/api/history?${searchParams.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.items)) {
-          return {
-            total: typeof data.total === 'number' ? data.total : data.items.length,
-            items: data.items,
-          };
-        }
-      }
+      if (res.ok) return await res.json();
     } catch (e) {
       serverCheckCache = false;
     }
   }
-  const fallback = BrowserEngine.getInspectionHistory(params);
-  return {
-    total: fallback?.total ?? 0,
-    items: Array.isArray(fallback?.items) ? fallback.items : [],
-  };
+  return BrowserEngine.getInspectionHistory(params);
 }
 
 export async function fetchInspectionDetail(id: string): Promise<any> {
@@ -253,7 +219,8 @@ export async function fetchInspectionDetail(id: string): Promise<any> {
       serverCheckCache = false;
     }
   }
-  return BrowserEngine.getInspectionDetail(id);
+  const history = BrowserEngine.getInspectionHistory({ limit: 100 });
+  return history.items.find((i) => i.id === id) || null;
 }
 
 export async function submitHumanReview(
@@ -340,19 +307,15 @@ export async function generateSyntheticWafer(category: string, size: number = 38
   }
   const matrix = generatePatternArray(category as any, size, Math.floor(Math.random() * 100));
   const spatial = computeSpatialMetrics(matrix);
-  const pred = classifyWaferMap(matrix, spatial);
+  const classification = classifyWaferMap(matrix, spatial);
+
   return {
     category,
     size,
     label: 'DEMONSTRATION DATA — SYNTHETIC WAFER MAP',
     wafer_map: matrix,
     spatial_metrics: spatial,
-    prediction: {
-      predicted_class: pred.predicted_class,
-      confidence: pred.confidence,
-      class_scores: pred.class_scores,
-      probabilities: pred.class_scores,
-    },
+    prediction: classification,
     is_synthetic: true,
   };
 }
@@ -523,9 +486,9 @@ export async function downloadPdfReport(id: string): Promise<void> {
       <div class="grid">
         <div class="card">
           <div class="title">Spatial Defect Metrics</div>
-          <div class="value">${(detail.failure_rate * 100).toFixed(2)}% Failure Rate</div>
+          <div class="value">${Number(detail.failure_rate).toFixed(2)}% Failure Rate</div>
           <div class="desc">Defective Dies: <b>${detail.failing_die_count}</b> / <b>${detail.total_die_count}</b></div>
-          <div class="desc">Yield Rate: <b>${((1 - detail.failure_rate) * 100).toFixed(2)}%</b></div>
+          <div class="desc">Yield Rate: <b>${(100 - Number(detail.failure_rate)).toFixed(2)}%</b></div>
         </div>
         <div class="card">
           <div class="title">Disposition & Quality Decision</div>
